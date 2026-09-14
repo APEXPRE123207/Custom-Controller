@@ -4,10 +4,10 @@
     <item>
         <color android:color="#0C0E14"/>
     </item>
-    <!-- Centered controller logo on launch -->
+    <!-- Centered controller logo on launch (not oversized) -->
     <item>
         <bitmap
             android:gravity="center"
-            android:src="@mipmap/ic_launcher" />
+            android:src="@drawable/splash_icon" />
     </item>
 </layer-list>
