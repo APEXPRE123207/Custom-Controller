@@ -6,12 +6,14 @@
 // tree, read text, and verify that the values of widget properties are correct.
 
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:nintendo_pro_controller/main.dart';
+import 'package:nintendo_pro_controller/services/connection_service.dart';
 
 void main() {
   testWidgets('Nintendo controller app loads smoke test', (WidgetTester tester) async {
     await tester.pumpWidget(const NintendoControllerApp());
     expect(find.byType(NintendoControllerApp), findsOneWidget);
+    ConnectionService.instance.stopDiscovery();
+    await tester.pump();
   });
 }

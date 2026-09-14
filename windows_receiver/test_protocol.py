@@ -21,6 +21,17 @@ def test_protocol_handshake():
     server_addr = ("127.0.0.1", 9922)
 
     try:
+        # 0. Test Auto-Discovery Probe
+        print("[TEST] 0. Testing Auto-Discovery Probe (Type 7)...")
+        disc_req = struct.pack("<BBBB", ord('S'), ord('W'), 7, 0)
+        sock.sendto(disc_req, server_addr)
+        resp, _ = sock.recvfrom(1024)
+        assert len(resp) >= 11 and resp[0] == ord('S') and resp[1] == ord('W') and resp[2] == 8, f"Expected Discover Resp (8), got {resp[2]}"
+        d_port, d_pin, d_nlen = struct.unpack("<HI B", resp[4:11])
+        d_name = resp[11:11+d_nlen].decode('utf-8')
+        assert d_port == 9922 and d_pin == 5566, f"Mismatch in discovered port/pin: {d_port}, {d_pin}"
+        print(f"  -> PASSED: Auto-Discovery succeeded! PC Name: '{d_name}', Port: {d_port}, PIN: {d_pin}")
+
         # 1. Test Auth with Wrong PIN (should fail)
         print("[TEST] 1. Testing invalid PIN rejection...")
         wrong_pin = 1111

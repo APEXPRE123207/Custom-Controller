@@ -37,12 +37,19 @@ class _ControllerScreenState extends State<ControllerScreen> {
 
     _connection.addListener(_onUpdate);
     _layout.addListener(_onUpdate);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_connection.isConnected) {
+        _connection.startDiscovery();
+      }
+    });
   }
 
   @override
   void dispose() {
     _connection.removeListener(_onUpdate);
     _layout.removeListener(_onUpdate);
+    _connection.stopDiscovery(notify: false);
     super.dispose();
   }
 
@@ -78,6 +85,40 @@ class _ControllerScreenState extends State<ControllerScreen> {
 
   Widget _buildTopStatusBar() {
     final isConnected = _connection.isConnected;
+    final isConnecting = _connection.status == ConnectionStatus.connecting || _connection.status == ConnectionStatus.authenticating;
+    final serverFound = !isConnected && _connection.discoveredServer != null;
+
+    Color pillBg;
+    Color pillBorder;
+    Color dotColor;
+    String statusText;
+
+    if (isConnected) {
+      pillBg = const Color(0xFF132F24);
+      pillBorder = const Color(0xFF00E676);
+      dotColor = const Color(0xFF00E676);
+      statusText = 'SwiCon Connected (${_connection.currentLatencyMs}ms)';
+    } else if (isConnecting) {
+      pillBg = const Color(0xFF142434);
+      pillBorder = const Color(0xFF00C3E3);
+      dotColor = const Color(0xFF00C3E3);
+      statusText = 'Connecting to Desktop...';
+    } else if (serverFound) {
+      pillBg = const Color(0xFF132F24);
+      pillBorder = const Color(0xFF00E676);
+      dotColor = const Color(0xFF00E676);
+      statusText = 'Found PC (${_connection.discoveredServer!.ip}) • Tap to Connect';
+    } else if (_connection.isSearching) {
+      pillBg = const Color(0xFF142434);
+      pillBorder = const Color(0xFF00C3E3).withValues(alpha: 0.6);
+      dotColor = const Color(0xFF00C3E3);
+      statusText = 'Scanning Wi-Fi for PC...';
+    } else {
+      pillBg = const Color(0xFF2A1C20);
+      pillBorder = const Color(0xFFFF5252);
+      dotColor = const Color(0xFFFF5252);
+      statusText = 'SwiCon Disconnected - Tap to Connect';
+    }
 
     return SafeArea(
       child: Padding(
@@ -87,15 +128,22 @@ class _ControllerScreenState extends State<ControllerScreen> {
           children: [
             // Connection Pill
             GestureDetector(
-              onTap: _openSettings,
+              onTap: () {
+                if (serverFound) {
+                  final s = _connection.discoveredServer!;
+                  _connection.connect(host: s.ip, port: s.port, pin: s.pin);
+                } else {
+                  _openSettings();
+                }
+              },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isConnected ? const Color(0xFF132F24) : const Color(0xFF2A1C20),
+                  color: pillBg,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: isConnected ? const Color(0xFF00E676) : const Color(0xFFFF5252),
-                    width: 1,
+                    color: pillBorder,
+                    width: 1.2,
                   ),
                 ),
                 child: Row(
@@ -106,16 +154,14 @@ class _ControllerScreenState extends State<ControllerScreen> {
                       height: 8,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isConnected ? const Color(0xFF00E676) : const Color(0xFFFF5252),
+                        color: dotColor,
                       ),
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      isConnected
-                          ? 'SwiCon Connected (${_connection.currentLatencyMs}ms)'
-                          : 'SwiCon Disconnected - Tap to Connect',
+                      statusText,
                       style: TextStyle(
-                        color: isConnected ? const Color(0xFF00E676) : Colors.white70,
+                        color: dotColor,
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                       ),

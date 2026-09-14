@@ -23,22 +23,42 @@ class _ControllerSettingsSheetState extends State<ControllerSettingsSheet> {
   void initState() {
     super.initState();
     final conn = ConnectionService.instance;
-    _ipController.text = conn.serverAddress ?? '192.168.1.';
-    _portController.text = conn.serverPort.toString();
-    _pinController.text = conn.currentPin;
+    conn.addListener(_onConnectionServiceUpdate);
+    _ipController.text = conn.discoveredServer?.ip ?? conn.serverAddress ?? '';
+    _portController.text = (conn.discoveredServer?.port ?? conn.serverPort).toString();
+    _pinController.text = conn.discoveredServer?.pin ?? conn.currentPin;
     _transport = conn.currentTransport;
 
     final haptic = HapticService.instance;
     _vibrationEnabled = haptic.isEnabled;
     _intensity = haptic.intensity;
+
+    if (!conn.isConnected) {
+      conn.startDiscovery();
+    }
   }
 
   @override
   void dispose() {
+    ConnectionService.instance.removeListener(_onConnectionServiceUpdate);
     _ipController.dispose();
     _portController.dispose();
     _pinController.dispose();
     super.dispose();
+  }
+
+  void _onConnectionServiceUpdate() {
+    if (!mounted) return;
+    final conn = ConnectionService.instance;
+    if (conn.discoveredServer != null) {
+      final s = conn.discoveredServer!;
+      if (_ipController.text.isEmpty || _ipController.text.endsWith('.')) {
+        _ipController.text = s.ip;
+      }
+      _portController.text = s.port.toString();
+      _pinController.text = s.pin;
+    }
+    setState(() {});
   }
 
   void _saveAndConnect() {
@@ -239,6 +259,10 @@ class _ControllerSettingsSheetState extends State<ControllerSettingsSheet> {
             ),
             const SizedBox(height: 14),
 
+            // Auto-Discovery Card
+            _buildAutoDiscoveryBanner(ConnectionService.instance),
+            const SizedBox(height: 14),
+
             // Desktop IP Address
             TextField(
               controller: _ipController,
@@ -328,6 +352,118 @@ class _ControllerSettingsSheetState extends State<ControllerSettingsSheet> {
         ),
       ),
     ),
+    );
+  }
+
+  Widget _buildAutoDiscoveryBanner(ConnectionService conn) {
+    final server = conn.discoveredServer;
+
+    if (server != null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF132F24),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF00E676), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF00E676).withValues(alpha: 0.2),
+              blurRadius: 10,
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Color(0xFF00E676), size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'PC Auto-Detected: ${server.name}',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  Text(
+                    '${server.ip}:${server.port} • PIN: ${server.pin} (Auto-Filled)',
+                    style: const TextStyle(color: Color(0xFF00E676), fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                _ipController.text = server.ip;
+                _portController.text = server.port.toString();
+                _pinController.text = server.pin;
+                _saveAndConnect();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00E676),
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                minimumSize: Size.zero,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('1-Tap Connect', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (conn.isSearching) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF142434),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF00C3E3).withValues(alpha: 0.6), width: 1.2),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00C3E3)),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Auto-detecting SwiCon PC Receiver on Wi-Fi...',
+                style: TextStyle(color: Color(0xFF00C3E3), fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF202430),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF333A4C)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.wifi_find_rounded, color: Colors.white70, size: 18),
+              SizedBox(width: 8),
+              Text('Wi-Fi Auto-Discovery', style: TextStyle(color: Colors.white70, fontSize: 12)),
+            ],
+          ),
+          TextButton.icon(
+            onPressed: () => conn.startDiscovery(),
+            icon: const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF00C3E3)),
+            label: const Text('Scan Local Network', style: TextStyle(color: Color(0xFF00C3E3), fontSize: 11, fontWeight: FontWeight.bold)),
+            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), minimumSize: Size.zero),
+          ),
+        ],
+      ),
     );
   }
 }

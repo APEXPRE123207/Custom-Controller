@@ -403,10 +403,27 @@ class DesktopReceiverApp:
         self.server_running = True
         self.thread = threading.Thread(target=self._server_loop, daemon=True)
         self.thread.start()
+        self.beacon_thread = threading.Thread(target=self._beacon_loop, daemon=True)
+        self.beacon_thread.start()
+
+    def _beacon_loop(self):
+        b_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        b_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        hostname = socket.gethostname()[:20].encode('utf-8')
+        while self.server_running:
+            try:
+                # Broadcast Discovery Response (Type 8) so phones auto-detect PC instantly
+                beacon = struct.pack("<BBBBHI B", ord('S'), ord('W'), 8, 0, self.port, self.pin, len(hostname)) + hostname
+                b_sock.sendto(beacon, ("255.255.255.255", self.port))
+            except Exception:
+                pass
+            time.sleep(1.2)
+        b_sock.close()
 
     def _server_loop(self):
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             self.sock.bind(("0.0.0.0", self.port))
         except Exception as e:
             self.root.after(0, lambda: messagebox.showerror("Socket Error", f"Could not bind UDP port {self.port}: {e}"))
@@ -420,6 +437,13 @@ class DesktopReceiverApp:
 
                 pkt_type = data[2]
                 seq = data[3]
+
+                # Auto-Discovery Probe from Mobile App
+                if pkt_type == 7:
+                    hostname = socket.gethostname()[:20].encode('utf-8')
+                    resp = struct.pack("<BBBBHI B", ord('S'), ord('W'), 8, seq, self.port, self.pin, len(hostname)) + hostname
+                    self.sock.sendto(resp, addr)
+                    continue
 
                 # Auth Request
                 if pkt_type == 1 and len(data) >= 8:

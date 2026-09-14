@@ -17,11 +17,13 @@
 // Packet protocol types
 enum PacketType {
     PKT_AUTH_REQ = 1,
-    PKT_AUTH_OK  = 2,
-    PKT_AUTH_ERR = 3,
-    PKT_INPUT    = 4,
-    PKT_PING     = 5,
-    PKT_PONG     = 6
+    PKT_AUTH_OK       = 2,
+    PKT_AUTH_ERR      = 3,
+    PKT_INPUT         = 4,
+    PKT_PING          = 5,
+    PKT_PONG          = 6,
+    PKT_DISCOVER      = 7,
+    PKT_DISCOVER_RESP = 8
 };
 
 // Controller Button Bitmasks
@@ -152,6 +154,9 @@ int main(int argc, char* argv[]) {
     serverAddr.sin_port = htons(static_cast<u_short>(port));
     serverAddr.sin_addr.s_addr = INADDR_ANY;
 
+    BOOL bBroadcast = TRUE;
+    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char*)&bBroadcast, sizeof(bBroadcast));
+
     if (bind(sock, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
         std::cerr << "[ERROR] Socket bind failed on port " << port << " : " << WSAGetLastError() << "\n";
         closesocket(sock);
@@ -201,6 +206,25 @@ int main(int argc, char* argv[]) {
 
         uint8_t pktType = buffer[2];
         uint8_t seq = buffer[3];
+
+        // Auto-Discovery Probe from Android app
+        if (pktType == PKT_DISCOVER) {
+            char hostName[64] = "SwiCon Native PC";
+            gethostname(hostName, sizeof(hostName));
+            uint8_t nameLen = static_cast<uint8_t>(strlen(hostName));
+
+            uint8_t resp[128];
+            resp[0] = 0x53; resp[1] = 0x57;
+            resp[2] = PKT_DISCOVER_RESP;
+            resp[3] = seq;
+            *reinterpret_cast<uint16_t*>(&resp[4]) = static_cast<uint16_t>(port);
+            *reinterpret_cast<uint32_t*>(&resp[6]) = static_cast<uint32_t>(pairingPin);
+            resp[10] = nameLen;
+            memcpy(&resp[11], hostName, nameLen);
+
+            sendto(sock, (const char*)resp, 11 + nameLen, 0, (sockaddr*)&clientAddr, clientAddrLen);
+            continue;
+        }
 
         if (pktType == PKT_AUTH_REQ && bytesReceived >= 8) {
             uint32_t receivedPin = *reinterpret_cast<uint32_t*>(&buffer[4]);

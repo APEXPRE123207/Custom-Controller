@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import '../models/controller_protocol.dart';
 
 enum ConnectionStatus {
@@ -16,6 +17,20 @@ enum TransportType {
   bluetooth,
 }
 
+class DiscoveredServer {
+  final String ip;
+  final int port;
+  final String pin;
+  final String name;
+
+  const DiscoveredServer({
+    required this.ip,
+    required this.port,
+    required this.pin,
+    required this.name,
+  });
+}
+
 /// Manages dual-mode communication (Bluetooth / Wi-Fi UDP) with the desktop receiver.
 class ConnectionService extends ChangeNotifier {
   static final ConnectionService instance = ConnectionService._internal();
@@ -27,6 +42,12 @@ class ConnectionService extends ChangeNotifier {
   String? serverAddress;
   int serverPort = 8899;
   String currentPin = "1234";
+
+  // Auto-Discovery State
+  DiscoveredServer? discoveredServer;
+  bool isSearching = false;
+  RawDatagramSocket? _discoverySocket;
+  Timer? _discoveryTimer;
 
   int sessionToken = 0;
   int _sequence = 0;
@@ -195,6 +216,123 @@ class ConnectionService extends ChangeNotifier {
     _udpSocket!.send(packet, target, serverPort);
   }
 
+  /// Starts scanning the local network for SwiCon desktop receivers
+  Future<void> startDiscovery() async {
+    if (isSearching || isConnected) return;
+    isSearching = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
+
+    try {
+      _discoverySocket?.close();
+      _discoverySocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      _discoverySocket!.broadcastEnabled = true;
+      _discoverySocket!.listen((event) {
+        if (event == RawSocketEvent.read) {
+          final dg = _discoverySocket?.receive();
+          if (dg != null) {
+            _handleDiscoveryResponse(dg);
+          }
+        }
+      });
+
+      // Send initial discovery probe
+      _sendDiscoveryProbes();
+
+      // Probe periodically every 900ms for up to 6 cycles
+      int attempts = 0;
+      _discoveryTimer?.cancel();
+      _discoveryTimer = Timer.periodic(const Duration(milliseconds: 900), (timer) {
+        attempts++;
+        if (attempts >= 6 || isConnected || discoveredServer != null) {
+          timer.cancel();
+          isSearching = false;
+          notifyListeners();
+        } else {
+          _sendDiscoveryProbes();
+        }
+      });
+    } catch (_) {
+      isSearching = false;
+      notifyListeners();
+    }
+  }
+
+  void stopDiscovery({bool notify = true}) {
+    _discoveryTimer?.cancel();
+    _discoveryTimer = null;
+    _discoverySocket?.close();
+    _discoverySocket = null;
+    if (isSearching) {
+      isSearching = false;
+      if (notify) notifyListeners();
+    }
+  }
+
+  void _sendDiscoveryProbes() {
+    if (_discoverySocket == null) return;
+    // Magic: 'S', 'W', Type: 7 (discover), Seq: 0
+    final probe = Uint8List.fromList([0x53, 0x57, PacketType.discover, 0x00]);
+
+    // 1. Send broadcast to global 255.255.255.255:8899
+    try {
+      _discoverySocket!.send(probe, InternetAddress('255.255.255.255'), 8899);
+    } catch (_) {}
+
+    // 2. Send broadcast to all local network subnet broadcast addresses (X.X.X.255:8899)
+    NetworkInterface.list(type: InternetAddressType.IPv4).then((interfaces) {
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          if (!addr.isLoopback) {
+            final parts = addr.address.split('.');
+            if (parts.length == 4) {
+              final subnetBcast = '${parts[0]}.${parts[1]}.${parts[2]}.255';
+              try {
+                _discoverySocket?.send(probe, InternetAddress(subnetBcast), 8899);
+              } catch (_) {}
+            }
+          }
+        }
+      }
+    }).catchError((_) {});
+  }
+
+  void _handleDiscoveryResponse(Datagram dg) {
+    final data = dg.data;
+    if (data.length < 10) return;
+    if (data[0] != 0x53 || data[1] != 0x57) return; // 'SW'
+    if (data[2] != PacketType.discoverReply) return; // Type 8
+
+    final view = ByteData.view(data.buffer, data.offsetInBytes);
+    final port = view.getUint16(4, Endian.little);
+    final pinVal = view.getUint32(6, Endian.little);
+
+    String serverName = "SwiCon Desktop";
+    if (data.length >= 11) {
+      final nameLen = data[10];
+      if (data.length >= 11 + nameLen) {
+        serverName = String.fromCharCodes(data.sublist(11, 11 + nameLen));
+      }
+    }
+
+    discoveredServer = DiscoveredServer(
+      ip: dg.address.address,
+      port: port > 0 ? port : 8899,
+      pin: pinVal.toString(),
+      name: serverName,
+    );
+
+    // Automatically update server address and pin for instant 1-tap connect
+    serverAddress = dg.address.address;
+    serverPort = port > 0 ? port : 8899;
+    currentPin = pinVal.toString();
+
+    isSearching = false;
+    _discoveryTimer?.cancel();
+    notifyListeners();
+  }
+
   void disconnect() {
     _heartbeatTimer?.cancel();
     _udpSocket?.close();
@@ -206,6 +344,7 @@ class ConnectionService extends ChangeNotifier {
 
   @override
   void dispose() {
+    stopDiscovery();
     disconnect();
     super.dispose();
   }

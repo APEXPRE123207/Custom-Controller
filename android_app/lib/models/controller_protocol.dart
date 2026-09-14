@@ -30,6 +30,8 @@ class PacketType {
   static const int inputState = 4;
   static const int ping = 5;
   static const int pong = 6;
+  static const int discover = 7;
+  static const int discoverReply = 8;
 }
 
 /// High-efficiency, ultra-low latency controller state snapshot.
