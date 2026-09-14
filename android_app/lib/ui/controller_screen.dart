@@ -277,16 +277,28 @@ class _ControllerScreenState extends State<ControllerScreen> {
                           Column(
                             children: [
                               Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
+                                width: 34,
+                                height: 34,
+                                decoration: const BoxDecoration(
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white24, width: 2),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Color(0xFF00C3E3),
+                                      blurRadius: 8,
+                                      spreadRadius: 0.5,
+                                    ),
+                                  ],
                                 ),
-                                child: const Icon(Icons.sports_esports_rounded, color: Colors.white38, size: 16),
+                                child: ClipOval(
+                                  child: Image.asset(
+                                    'assets/icon/app_logo_circle.png',
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Icon(Icons.sports_esports_rounded, color: Colors.white70, size: 20),
+                                  ),
+                                ),
                               ),
                               const SizedBox(height: 4),
-                              const Text('SWITCH', style: TextStyle(color: Colors.white24, fontSize: 8, letterSpacing: 1.5)),
+                              const Text('SwiCon', style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                             ],
                           ),
 

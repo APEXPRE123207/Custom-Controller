@@ -103,7 +103,7 @@ def release_all():
 class DesktopReceiverApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Nintendo Switch Controller - Desktop Receiver")
+        self.root.title("SwiCon - Desktop Receiver")
         self.root.geometry("780x560")
         self.root.minsize(740, 520)
         self.root.configure(bg="#12141A")
@@ -140,7 +140,7 @@ class DesktopReceiverApp:
         header = tk.Frame(self.root, bg="#191C24", height=60)
         header.pack(fill=tk.X)
 
-        title_lbl = tk.Label(header, text="🎮 NINTENDO SWITCH PRO CONTROLLER RECEIVER", 
+        title_lbl = tk.Label(header, text="🎮 SwiCon - NINTENDO SWITCH PRO CONTROLLER RECEIVER", 
                              font=("Segoe UI", 13, "bold"), fg="#FFFFFF", bg="#191C24")
         title_lbl.pack(side=tk.LEFT, padx=18, pady=14)
 

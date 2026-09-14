@@ -1,5 +1,5 @@
 name: nintendo_pro_controller
-description: "Nintendo Switch Pro Controller App for Android to Desktop"
+description: "SwiCon - Nintendo Switch Controller App for Android to Desktop"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -17,3 +17,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/app_logo_circle.png
