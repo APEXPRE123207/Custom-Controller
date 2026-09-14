@@ -39,9 +39,18 @@ class Input(ctypes.Structure):
     _fields_ = [("type", ctypes.c_ulong),
                 ("ii", Input_I)]
 
+try:
+    import pydirectinput
+    pydirectinput.PAUSE = 0.0
+    pydirectinput.FAILSAFE = False
+    HAVE_PYDIRECTINPUT = True
+except ImportError:
+    HAVE_PYDIRECTINPUT = False
+
 INPUT_KEYBOARD = 1
-KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_EXTENDEDKEY = 0x0001
+KEYEVENTF_KEYUP = 0x0002
+KEYEVENTF_SCANCODE = 0x0008
 MAPVK_VK_TO_VSC = 0
 
 # Virtual key codes matching Ryujinx configuration
@@ -74,6 +83,36 @@ VK_MAP = {
     'R_RIGHT': (0x4C, 'L'),    # 'L'
 }
 
+# Mapping to pydirectinput key names for DirectInput hardware scan code delivery
+VK_TO_PDI = {
+    0x5A: 'z',
+    0x58: 'x',
+    0x43: 'c',
+    0x56: 'v',
+    0xBB: '=',
+    0xBD: '-',
+    0x26: 'up',
+    0x28: 'down',
+    0x25: 'left',
+    0x27: 'right',
+    0x45: 'e',
+    0x55: 'u',
+    0x51: 'q',
+    0x4F: 'o',
+    0x46: 'f',
+    0x48: 'h',
+    0x24: 'home',
+    0x7B: 'f12',
+    0x57: 'w',
+    0x53: 's',
+    0x41: 'a',
+    0x44: 'd',
+    0x49: 'i',
+    0x4B: 'k',
+    0x4A: 'j',
+    0x4C: 'l',
+}
+
 EXTENDED_KEYS = {0x26, 0x28, 0x25, 0x27, 0x24}
 
 # Global input state cache
@@ -84,16 +123,38 @@ def inject_key(vk_code, pressed):
         return
     g_key_states[vk_code] = pressed
 
+    # 1. Primary: DirectInput via pydirectinput (required by Ryujinx / DirectX emulators)
+    if HAVE_PYDIRECTINPUT and vk_code in VK_TO_PDI:
+        pdi_key = VK_TO_PDI[vk_code]
+        try:
+            if pressed:
+                pydirectinput.keyDown(pdi_key)
+            else:
+                pydirectinput.keyUp(pdi_key)
+            return
+        except Exception:
+            pass
+
+    # 2. Native Win32 SendInput with hardware scancode (KEYEVENTF_SCANCODE = 0x0008)
     scan_code = ctypes.windll.user32.MapVirtualKeyA(vk_code, MAPVK_VK_TO_VSC)
-    flags = 0 if pressed else KEYEVENTF_KEYUP
+    flags = KEYEVENTF_SCANCODE
+    if not pressed:
+        flags |= KEYEVENTF_KEYUP
     if vk_code in EXTENDED_KEYS:
         flags |= KEYEVENTF_EXTENDEDKEY
 
     extra = ctypes.c_ulong(0)
     ii_ = Input_I()
-    ii_.ki = KeyBdInput(vk_code, scan_code, flags, 0, ctypes.pointer(extra))
+    ii_.ki = KeyBdInput(0, scan_code, flags, 0, ctypes.pointer(extra))
     x = Input(ctypes.c_ulong(INPUT_KEYBOARD), ii_)
-    ctypes.windll.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+    res = ctypes.windll.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+
+    # 3. Fallback to keybd_event with scancode if SendInput was filtered by UIPI
+    if res == 0:
+        try:
+            ctypes.windll.user32.keybd_event(vk_code, scan_code, flags, 0)
+        except Exception:
+            pass
 
 def release_all():
     for vk, state in list(g_key_states.items()):
@@ -281,9 +342,36 @@ class DesktopReceiverApp:
                              fg="#E2E6EF", bg="#181A22", selectcolor="#202430", activebackground="#181A22", activeforeground="#FFFFFF")
         chk.pack(side=tk.LEFT, padx=6)
 
+        focus_btn = tk.Button(bottom_bar, text="⚡ Focus Ryujinx / Game", font=("Segoe UI", 8, "bold"), 
+                              bg="#00796B", fg="#FFFFFF", relief=tk.FLAT, padx=8, command=self._focus_emulator)
+        focus_btn.pack(side=tk.RIGHT, padx=6)
+
         regen_btn = tk.Button(bottom_bar, text="Regenerate PIN", font=("Segoe UI", 8), 
                               bg="#2A2F3E", fg="#FFFFFF", relief=tk.FLAT, padx=8, command=self._regen_pin)
         regen_btn.pack(side=tk.RIGHT, padx=6)
+
+    def _focus_emulator(self):
+        target_hwnds = []
+        user32 = ctypes.windll.user32
+        def enum_cb(hwnd, extra):
+            if user32.IsWindowVisible(hwnd):
+                length = user32.GetWindowTextLengthW(hwnd)
+                if length > 0:
+                    buff = ctypes.create_unicode_buffer(length + 1)
+                    user32.GetWindowTextW(hwnd, buff, length + 1)
+                    t = buff.value.lower()
+                    if "ryujinx" in t or "yuzu" in t or "switch" in t:
+                        target_hwnds.append((hwnd, buff.value))
+            return True
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
+        user32.EnumWindows(WNDENUMPROC(enum_cb), 0)
+        if target_hwnds:
+            hwnd, title = target_hwnds[0]
+            user32.ShowWindow(hwnd, 9)
+            user32.SetForegroundWindow(hwnd)
+            messagebox.showinfo("Focus Game", f"Focused window:\n{title}\n\nInputs are now routed directly to the emulator!")
+        else:
+            messagebox.showinfo("Focus Game", "Ryujinx window not automatically detected.\n\nPlease click directly inside your Ryujinx game window so Windows routes inputs to it!")
 
     def _draw_stick_base(self, canvas):
         canvas.create_oval(10, 10, 90, 90, outline="#3A4050", width=1)

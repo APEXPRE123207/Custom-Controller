@@ -109,6 +109,11 @@ flutter run -d fbac6720
 **Q: Why is my character not moving?**  
 A: Did you actually hit "Connect" on your phone, or are you just tapping the screen hoping wireless telepathy would carry the signal? Check your IP and PIN.
 
+**Q: Notepad registers typing, but Ryujinx isn't taking input?**  
+A: Two quick checks:
+1. **Window Focus**: Emulators use DirectInput / SDL2, which strictly process keyboard events when the game window is **active/focused**. Click inside the Ryujinx window (or click the **`⚡ Focus Ryujinx / Game`** button in the desktop receiver app).
+2. **Ryujinx Input Settings**: Go to `Options > Settings > Input > Player 1 > Configure`. Ensure `Input Device` is set to `All Keyboards` (or Keyboard) and that the key bindings match the chart above. SwiCon now injects low-level hardware scan codes directly into DirectInput/SDL2.
+
 **Q: Can I play Dark Souls with this?**  
 A: Legally, yes. Emotionally, we take zero financial liability for your phone screen if you chuck it into drywall after dying to Ornstein and Smough.
 

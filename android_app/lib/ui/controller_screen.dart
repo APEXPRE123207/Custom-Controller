@@ -11,6 +11,7 @@ import 'widgets/dpad.dart';
 import 'widgets/joystick.dart';
 import 'widgets/layout_edit_toolbar.dart';
 import 'widgets/shoulder_buttons.dart';
+import 'widgets/stick_click_button.dart';
 
 class ControllerScreen extends StatefulWidget {
   const ControllerScreen({super.key});
@@ -168,7 +169,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
               // 1. LEFT STICK (Customizable)
               CustomizableControl(
                 elementKey: 'leftStick',
-                label: 'L-Stick',
+                label: 'L-Stick / L3',
                 screenConstraints: constraints,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -185,8 +186,13 @@ class _ControllerScreenState extends State<ControllerScreen> {
                         });
                       },
                     ),
-                    const SizedBox(height: 2),
-                    const Text('L-Stick (F)', style: TextStyle(color: Colors.white38, fontSize: 9)),
+                    const SizedBox(height: 5),
+                    NintendoStickClickButton(
+                      label: 'L3 (F)',
+                      buttonMask: ControllerButton.lStickBtn,
+                      onButtonChange: _updateButton,
+                      accentColor: const Color(0xFF00C3E3),
+                    ),
                   ],
                 ),
               ),
@@ -216,7 +222,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
               // 3. RIGHT STICK (Customizable)
               CustomizableControl(
                 elementKey: 'rightStick',
-                label: 'R-Stick',
+                label: 'R-Stick / R3',
                 screenConstraints: constraints,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -233,8 +239,13 @@ class _ControllerScreenState extends State<ControllerScreen> {
                         });
                       },
                     ),
-                    const SizedBox(height: 2),
-                    const Text('R-Stick (H)', style: TextStyle(color: Colors.white38, fontSize: 9)),
+                    const SizedBox(height: 5),
+                    NintendoStickClickButton(
+                      label: 'R3 (H)',
+                      buttonMask: ControllerButton.rStickBtn,
+                      onButtonChange: _updateButton,
+                      accentColor: const Color(0xFFFF4554),
+                    ),
                   ],
                 ),
               ),

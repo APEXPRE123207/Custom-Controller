@@ -85,16 +85,20 @@ void InjectKeyEvent(WORD vkCode, bool pressed) {
 
     INPUT input = {0};
     input.type = INPUT_KEYBOARD;
-    input.ki.wVk = vkCode;
+    input.ki.wVk = 0; // DirectInput/emulators read wScan when KEYEVENTF_SCANCODE is set
     input.ki.wScan = static_cast<WORD>(MapVirtualKeyA(vkCode, MAPVK_VK_TO_VSC));
-    input.ki.dwFlags = (pressed ? 0 : KEYEVENTF_KEYUP);
+    input.ki.dwFlags = KEYEVENTF_SCANCODE | (pressed ? 0 : KEYEVENTF_KEYUP);
 
     // Extended keys require KEYEVENTF_EXTENDEDKEY flag
     if (vkCode == VK_UP || vkCode == VK_DOWN || vkCode == VK_LEFT || vkCode == VK_RIGHT || vkCode == VK_HOME) {
         input.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
     }
 
-    SendInput(1, &input, sizeof(INPUT));
+    UINT res = SendInput(1, &input, sizeof(INPUT));
+    if (res == 0) {
+        // Fallback to keybd_event for DirectInput/UIPI edge cases
+        keybd_event(static_cast<BYTE>(vkCode), static_cast<BYTE>(input.ki.wScan), input.ki.dwFlags, 0);
+    }
 }
 
 void ReleaseAllKeys() {
