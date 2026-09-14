@@ -1,8 +1,9 @@
-# 🎮 Nintendo Switch Pro Controller: Broke Gamer Edition™
+# 🎮 SwiCon: Broke Gamer Edition™
+### *The Zero-Drift Nintendo Switch Controller for Android & Windows*
 
 > *"Why pay Nintendo $70 for a piece of plastic that develops Joy-Con drift in 3 weeks when you have a $1000 smartphone in your pocket?"*
 
-Welcome to the **Custom Nintendo Switch Controller** project. We spent actual human hours writing code so you can turn your pocket supercomputer into a virtual gamepad and play Ryujinx on your PC like the pirate... *ahem*, completely legal backup enthusiast you are.
+Welcome to **SwiCon**. We spent actual human hours writing code so you can turn your pocket supercomputer into an ultra-responsive virtual gamepad and play Ryujinx on your PC like the pirate... *ahem*, completely legal backup enthusiast you are.
 
 ---
 
@@ -13,11 +14,20 @@ Your phone is capable of rendering 3D graphics, running AI models, and browsing 
 ### Features That Put Nintendo to Shame:
 - **0% Mechanical Stick Drift™**: Scientifically proven to have zero hardware stick drift because there are literally no physical potentiometers to wear out. Take that, Joy-Con class-action lawsuits.
 - **Neon Joy-Con Drip**: Left side is radiant Neon Cyan, right side is flaming Neon Red. It looks like you ripped the screen off a Switch OLED and glued it to your hands.
+- **Freeform Drag & Resize (Layout Customizer)**:
+  - Tiny hands? Gigantic gamer thumbs? Hate Nintendo's button placements? 
+  - Tap the **🛠️ icon** or open Settings to enter **Layout Edit Mode**.
+  - **Drag anywhere**: Move any stick, D-Pad, trigger, or action button freely across your screen.
+  - **Scale on the fly**: Use the top toolbar slider to scale buttons from **70% to 150%**.
+  - **Quick Selectors**: Pick controls instantly via the top **Dropdown Selector** or tap the **`◀` and `▶` arrows** to cycle through buttons.
+  - **Auto-Save & Reset**: Your custom ergonomic layout is saved automatically. Hit **Reset** anytime to restore default console layout.
+- **Dark Splash & Custom Icon**:
+  - Full edge-to-edge dark theme launcher icon for your phone's home screen.
+  - Seamless dark startup screen with zero ugly white borders or "bursting" stretched logos.
+  - In-game center console features the sleek circular SwiCon emblem.
 - **Haptic Vibrations**:
   - Yes, your phone can buzz aggressively when you smash buttons.
   - *Hate vibrations?* We included an on/off toggle and intensity sliders. We're not monsters.
-- **Freeform Drag & Resize (Custom Layout Editor)**:
-  - Tiny hands? Gigantic gamer thumbs? Hate Nintendo's button placements? Tap the 🛠️ icon or open Settings to enter **Layout Edit Mode**. Drag any stick, D-Pad, trigger, or action button anywhere on your screen and scale their sizes from 70% to 150%. Your layout is saved automatically.
 - **Battery Saver Mode (Delta Compression)**:
   - We don't spam your Wi-Fi when you're just standing still in Breath of the Wild admiring the grass. We only blast packets when your thumbs actually twitch. Save that precious phone battery for doomscrolling later.
 - **Security PIN Handshake**:
@@ -31,7 +41,7 @@ The brains of the operation. It sits on your PC, catches the wireless packets fr
 
 ### Choose Your Fighter:
 
-#### 1. The Shiny GUI Visualizer (`Launch_Desktop_App.bat` or `python desktop_app.py`)
+#### 1. The Shiny GUI Visualizer (`Launch_Desktop_App.bat` or `python windows_receiver\desktop_app.py`)
 - **For people who like pretty lights**: Shows a virtual controller on your monitor that lights up in real-time as you press buttons on your phone.
 - **Stick Tracker**: Real-time crosshairs tracking every micrometer of your thumb movement.
 - **Safety Switch**: A checkbox to pause keystroke injection so you don't accidentally write `WASDZZZXX` in your boss's Teams chat.
@@ -81,11 +91,11 @@ Look at your PC screen. It will shout two things at you:
 1. Your **Desktop IP** (e.g., `192.168.1.50`)
 2. Your **Security PIN** (e.g., `4269`)
 
-### Step 2: Fire Up the Phone Controller
-Plug your phone into your PC (or make sure Flutter sees it) and run:
+### Step 2: Fire Up SwiCon on Your Phone
+Plug your phone into your PC and run:
 ```powershell
 cd android_app
-flutter run
+flutter run -d fbac6720
 ```
 1. Tap the status bar at the top (or the ⚙️ gear icon).
 2. Type in your PC's IP and the PIN.
