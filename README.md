@@ -16,6 +16,8 @@ Your phone is capable of rendering 3D graphics, running AI models, and browsing 
 - **Haptic Vibrations**:
   - Yes, your phone can buzz aggressively when you smash buttons.
   - *Hate vibrations?* We included an on/off toggle and intensity sliders. We're not monsters.
+- **Freeform Drag & Resize (Custom Layout Editor)**:
+  - Tiny hands? Gigantic gamer thumbs? Hate Nintendo's button placements? Tap the 🛠️ icon or open Settings to enter **Layout Edit Mode**. Drag any stick, D-Pad, trigger, or action button anywhere on your screen and scale their sizes from 70% to 150%. Your layout is saved automatically.
 - **Battery Saver Mode (Delta Compression)**:
   - We don't spam your Wi-Fi when you're just standing still in Breath of the Wild admiring the grass. We only blast packets when your thumbs actually twitch. Save that precious phone battery for doomscrolling later.
 - **Security PIN Handshake**:

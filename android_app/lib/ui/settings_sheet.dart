@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/haptic_service.dart';
 import '../services/connection_service.dart';
+import '../services/layout_service.dart';
 
 class ControllerSettingsSheet extends StatefulWidget {
   const ControllerSettingsSheet({super.key});
@@ -146,6 +147,55 @@ class _ControllerSettingsSheetState extends State<ControllerSettingsSheet> {
                 ],
               ),
             ],
+
+            const Divider(color: Color(0xFF2C303B), height: 28),
+
+            // Button Layout & Sizing Section
+            const Text(
+              'Button Layout & Size Customization',
+              style: TextStyle(color: Color(0xFF00E676), fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF202430),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF00E676).withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Customize Button Positions & Sizes',
+                    style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Drag buttons anywhere on your screen and adjust their sizes to match your hand ergonomics.',
+                    style: TextStyle(color: Colors.white60, fontSize: 12),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00E676),
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.touch_app_rounded, size: 18),
+                      label: const Text('Enter Layout Edit Mode', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        LayoutService.instance.toggleEditMode(true);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
             const Divider(color: Color(0xFF2C303B), height: 28),
 
