@@ -11,12 +11,46 @@ $origWidth = $srcImg.Width
 $origHeight = $srcImg.Height
 Write-Host "Source image size: ${origWidth}x${origHeight}"
 
-# We will take a square center crop
+# Square center crop
 $dim = [Math]::Min($origWidth, $origHeight)
 $cropX = ($origWidth - $dim) / 2
 $cropY = ($origHeight - $dim) / 2
 $cropRect = [System.Drawing.Rectangle]::new($cropX, $cropY, $dim, $dim)
 
+# Function to create full square launcher icons (no transparent corners, eliminating white border)
+function Create-Square-Icon {
+    param (
+        [int]$size,
+        [string]$destPath
+    )
+
+    $destBmp = [System.Drawing.Bitmap]::new($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $g = [System.Drawing.Graphics]::FromImage($destBmp)
+    
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+    $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+
+    # Fill solid dark background matching the controller theme
+    $g.Clear([System.Drawing.Color]::FromArgb(255, 12, 14, 20))
+
+    # Draw full square image edge-to-edge
+    $destRect = [System.Drawing.Rectangle]::new(0, 0, $size, $size)
+    $g.DrawImage($srcImg, $destRect, $cropRect, [System.Drawing.GraphicsUnit]::Pixel)
+
+    $g.Dispose()
+
+    $dir = Split-Path -Parent $destPath
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    }
+
+    $destBmp.Save($destPath, [System.Drawing.Imaging.ImageFormat]::Png)
+    $destBmp.Dispose()
+    Write-Host "Created Square Launcher Icon: $destPath ($size x $size)"
+}
+
+# Function to create circular in-app logo
 function Create-Circular-Icon {
     param (
         [int]$size,
@@ -42,7 +76,7 @@ function Create-Circular-Icon {
 
     $g.ResetClip()
 
-    # Draw subtle circular accent border (Neon Cyan / Gold aesthetic)
+    # Draw subtle circular accent border (Neon Cyan aesthetic)
     $pen = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(180, 0, 195, 227), 2)
     $g.DrawEllipse($pen, 1, 1, $size - 2, $size - 2)
     $pen.Dispose()
@@ -57,7 +91,7 @@ function Create-Circular-Icon {
 
     $destBmp.Save($destPath, [System.Drawing.Imaging.ImageFormat]::Png)
     $destBmp.Dispose()
-    Write-Host "Created: $destPath ($size x $size)"
+    Write-Host "Created Circular In-App Logo: $destPath ($size x $size)"
 }
 
 $sizes = @{
@@ -68,15 +102,16 @@ $sizes = @{
     "android_app\android\app\src\main\res\mipmap-xxxhdpi" = 192
 }
 
+# 1. Generate full square launcher icons for home screen (fills entire icon area, no white background badge)
 foreach ($entry in $sizes.GetEnumerator()) {
     $folder = $entry.Key
     $px = $entry.Value
-    Create-Circular-Icon -size $px -destPath "$folder\ic_launcher.png"
-    Create-Circular-Icon -size $px -destPath "$folder\ic_launcher_round.png"
+    Create-Square-Icon -size $px -destPath "$folder\ic_launcher.png"
+    Create-Square-Icon -size $px -destPath "$folder\ic_launcher_round.png"
 }
 
-# Also create high-res asset for in-app display (512x512)
+# 2. Keep the inside in-app emblem circular with cyan border
 Create-Circular-Icon -size 512 -destPath "android_app\assets\icon\app_logo_circle.png"
 
 $srcImg.Dispose()
-Write-Host "All circular icons generated successfully!"
+Write-Host "Icons generated successfully: Square home screen launcher + Circular in-app logo!"
