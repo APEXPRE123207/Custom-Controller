@@ -38,6 +38,15 @@ class CustomizableControl extends StatelessWidget {
     if (isEditMode) {
       controlBody = GestureDetector(
         behavior: HitTestBehavior.opaque,
+        onTapDown: (_) {
+          layoutService.selectElement(elementKey);
+        },
+        onPanDown: (_) {
+          layoutService.selectElement(elementKey);
+        },
+        onPanStart: (_) {
+          layoutService.selectElement(elementKey);
+        },
         onTap: () {
           layoutService.selectElement(elementKey);
         },
@@ -58,7 +67,7 @@ class CustomizableControl extends StatelessWidget {
             ),
             borderRadius: BorderRadius.circular(16),
             color: isSelected
-                ? const Color(0xFF00E676).withValues(alpha: 0.15)
+                ? const Color(0xFF00E676).withValues(alpha: 0.25)
                 : const Color(0xFF00C3E3).withValues(alpha: 0.08),
           ),
           padding: const EdgeInsets.all(6),
