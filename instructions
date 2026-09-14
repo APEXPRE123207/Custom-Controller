@@ -1,0 +1,17 @@
+The controller is of nintendo.
+There will be two apps one for windows and one for android. 
+For android use flutter language and will be build locally, for windows use flutter if possible else build the app in whatever language but build the app in github workflows.
+The connections between the android and desktop will be thorugh bluetooth if possible.
+Set security mesures and all.
+The controller will be used to play games and applications on the desktop.
+The control mapping is given in the screenshot.
+The controller is of nintendo switch pro controller.
+Make sure the android app has the same layout.
+If possible put haptic and vibrations but keep an option to turn off the vibrations.
+App must contain following features:
+1. Connect to bluetooth and search for available devices.
+2. Connect to the desktop using the bluetooth.
+3. Map the buttons according to the screenshot.
+4. Send the input to the desktop.
+5. Keep the latency as low as possible.
+6. keep power efficiency as high as possible.
