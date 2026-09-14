@@ -1,6 +1,6 @@
 Add-Type -AssemblyName System.Drawing
 
-$srcPath = "W:\CODE\Controller\app_logo.png"
+$srcPath = "W:\CODE\Controller\app_logo.jpg"
 if (-not (Test-Path $srcPath)) {
     Write-Error "Source image $srcPath does not exist."
     exit 1
