@@ -21,10 +21,10 @@ Your phone is capable of rendering 3D graphics, running AI models, and browsing 
   - **Scale on the fly**: Use the top toolbar slider to scale buttons from **70% to 150%**.
   - **Quick Selectors**: Pick controls instantly via the top **Dropdown Selector** or tap the **`◀` and `▶` arrows** to cycle through buttons.
   - **Auto-Save & Reset**: Your custom ergonomic layout is saved automatically. Hit **Reset** anytime to restore default console layout.
-- **Dark Splash & Custom Icon**:
-  - Full edge-to-edge dark theme launcher icon for your phone's home screen.
-  - Seamless dark startup screen with zero ugly white borders or "bursting" stretched logos.
-  - In-game center console features the sleek circular SwiCon emblem.
+- **Bluetooth & Wi-Fi Dual-Mode**:
+  - Seamlessly connect over ultra-low latency Wi-Fi UDP or Bluetooth RFCOMM when you don't have a shared Wi-Fi network available.
+- **Xbox & Nintendo Button Layouts**:
+  - Switch between Nintendo (`X/A/B/Y`) and Xbox (`Y/B/A/X`) face button placements with a single tap in Settings.
 - **Haptic Vibrations**:
   - Yes, your phone can buzz aggressively when you smash buttons.
   - *Hate vibrations?* We included an on/off toggle and intensity sliders. We're not monsters.
@@ -182,13 +182,8 @@ A: We send 14-byte micro-packets over local UDP. Latency is typically **< 4 mill
 **Q: How do I use the Virtual Gamepad (XInput) mode?**  
 A: Just run **`dist\SwiCon.exe`** (or `Launch_Desktop_App.bat`). SwiCon automatically checks if the ViGEmBus driver is present. If not, it prompts you and automatically downloads & installs the official driver with one click! Once installed, SwiCon creates a virtual Xbox 360 controller with real analog axes. In Ryujinx, go to `Options > Settings > Input > Player 1 > Configure`, choose `Controller (XBOX 360 For Windows)`, and enjoy true analog control.
 
-**Q: What's the difference between Virtual Gamepad and Keyboard mode?**  
-A: **Virtual Gamepad** creates a real virtual Xbox controller at the Windows driver level — Ryujinx sees actual analog axes (10% tilt ≠ 100% tilt, enabling walking vs sprinting and precise camera panning). **Keyboard mode** converts everything to key presses (W/A/S/D), which is purely digital on/off. Virtual Gamepad is strictly better for all modern games.
+**Q: What if I don't have Wi-Fi?**  
+A: Switch to **Bluetooth mode**! Pair your phone and PC via Bluetooth in Windows Settings, select Bluetooth transport in the SwiCon app Settings, pick your PC, and connect directly with zero Wi-Fi required.
 
 **Q: Can I share the desktop app with someone else without them installing Python?**  
-A: Yes! Simply send them **`dist\SwiCon.exe`**. It is a single, self-contained 10 MB executable that bundles the entire Python runtime, visualizer, and gamepad libraries. No Python, Conda, or pip is needed on their machine. When they open it, if their PC lacks the ViGEmBus driver, SwiCon will automatically offer to download and install it for them.
-
----
-
-## ⚙️ GitHub Actions
-There is a CI workflow in `.github/workflows/build-windows.yml`. Whenever you push code, GitHub's cloud servers will compile the Windows executable with MSVC and hand you a shiny `.zip` file so you don't even have to compile anything yourself. Automation at its finest.
+A: Yes! Simply send them **`dist\SwiCon.exe`**. It is a single, self-contained executable that bundles the entire Python runtime, visualizer, and gamepad libraries. No Python, Conda, or pip is needed on their machine. When they open it, if their PC lacks the ViGEmBus driver, SwiCon will automatically offer to download and install it for them.

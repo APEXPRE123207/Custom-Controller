@@ -1,6 +1,15 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/layout_config.dart';
+
+/// Button face label layout — Nintendo vs Xbox convention.
+enum ButtonLayoutMode {
+  /// Nintendo: X(top), A(right), B(bottom), Y(left)
+  nintendo,
+  /// Xbox: Y(top), B(right), A(bottom), X(left)
+  xbox,
+}
 
 /// Manages customization of button positions and sizes.
 class LayoutService extends ChangeNotifier {
@@ -12,6 +21,13 @@ class LayoutService extends ChangeNotifier {
   ControllerLayoutConfig config = ControllerLayoutConfig.defaultLayout();
   bool isEditMode = false;
   String selectedElement = 'actionButtons'; // Default selection for scaling
+  ButtonLayoutMode buttonLayoutMode = ButtonLayoutMode.nintendo;
+
+  void setButtonLayoutMode(ButtonLayoutMode mode) {
+    buttonLayoutMode = mode;
+    saveLayout();
+    notifyListeners();
+  }
 
   void toggleEditMode(bool enable) {
     isEditMode = enable;
@@ -112,7 +128,11 @@ class LayoutService extends ChangeNotifier {
     try {
       final file = _getStorageFile();
       if (file != null) {
-        await file.writeAsString(config.serialize());
+        final data = {
+          'layout': config.toJson(),
+          'buttonLayoutMode': buttonLayoutMode.name,
+        };
+        await file.writeAsString(jsonEncode(data));
       }
     } catch (e) {
       debugPrint("Error saving layout: $e");
@@ -124,11 +144,28 @@ class LayoutService extends ChangeNotifier {
       final file = _getStorageFile();
       if (file != null && await file.exists()) {
         final content = await file.readAsString();
-        final loaded = ControllerLayoutConfig.deserialize(content);
-        if (loaded != null) {
+        final map = jsonDecode(content) as Map<String, dynamic>;
+
+        // Load layout config
+        if (map.containsKey('layout')) {
+          final loaded = ControllerLayoutConfig.fromJson(map['layout']);
           config = loaded;
-          notifyListeners();
+        } else {
+          // Backward compat: old format was just the layout directly
+          final loaded = ControllerLayoutConfig.deserialize(content);
+          if (loaded != null) config = loaded;
         }
+
+        // Load button layout mode
+        if (map.containsKey('buttonLayoutMode')) {
+          final modeStr = map['buttonLayoutMode'] as String;
+          buttonLayoutMode = ButtonLayoutMode.values.firstWhere(
+            (m) => m.name == modeStr,
+            orElse: () => ButtonLayoutMode.nintendo,
+          );
+        }
+
+        notifyListeners();
       }
     } catch (e) {
       debugPrint("Error loading layout: $e");

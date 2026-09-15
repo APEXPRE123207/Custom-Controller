@@ -15,13 +15,16 @@ class HapticService {
     if (!isEnabled) return;
     switch (intensity) {
       case HapticIntensity.light:
-        HapticFeedback.lightImpact();
+        // Delicate subtle tick - lowest vibration
+        HapticFeedback.selectionClick();
         break;
       case HapticIntensity.medium:
+        // Crisp, distinct tap - medium vibration
         HapticFeedback.mediumImpact();
         break;
       case HapticIntensity.heavy:
-        HapticFeedback.heavyImpact();
+        // Full, powerful motor vibration - strongest vibration
+        HapticFeedback.vibrate();
         break;
     }
   }
@@ -35,6 +38,6 @@ class HapticService {
   /// Trigger trigger press
   void triggerHeavy() {
     if (!isEnabled) return;
-    HapticFeedback.heavyImpact();
+    HapticFeedback.vibrate();
   }
 }

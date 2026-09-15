@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/haptic_service.dart';
+import '../../services/layout_service.dart';
 
 class NintendoActionButtons extends StatefulWidget {
   final double size;
@@ -24,16 +25,17 @@ class NintendoActionButtons extends StatefulWidget {
 }
 
 class _NintendoActionButtonsState extends State<NintendoActionButtons> {
+  // Track press state by position (top/right/bottom/left), not label
   final Map<String, bool> _pressStates = {
-    'A': false,
-    'B': false,
-    'X': false,
-    'Y': false,
+    'top': false,
+    'right': false,
+    'bottom': false,
+    'left': false,
   };
 
-  void _handlePress(String label, int mask, bool pressed) {
+  void _handlePress(String position, int mask, bool pressed) {
     setState(() {
-      _pressStates[label] = pressed;
+      _pressStates[position] = pressed;
     });
     widget.onButtonChange(mask, pressed);
     if (pressed) {
@@ -43,15 +45,16 @@ class _NintendoActionButtonsState extends State<NintendoActionButtons> {
 
   Widget _buildButton({
     required String label,
+    required String position,
     required int mask,
     required Color accentColor,
   }) {
-    final isPressed = _pressStates[label] ?? false;
+    final isPressed = _pressStates[position] ?? false;
 
     return GestureDetector(
-      onTapDown: (_) => _handlePress(label, mask, true),
-      onTapUp: (_) => _handlePress(label, mask, false),
-      onTapCancel: () => _handlePress(label, mask, false),
+      onTapDown: (_) => _handlePress(position, mask, true),
+      onTapUp: (_) => _handlePress(position, mask, false),
+      onTapCancel: () => _handlePress(position, mask, false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 60),
         width: 44,
@@ -94,7 +97,18 @@ class _NintendoActionButtonsState extends State<NintendoActionButtons> {
 
   @override
   Widget build(BuildContext context) {
-    // Switch layout: X (top), A (right), B (bottom), Y (left)
+    final isXbox = LayoutService.instance.buttonLayoutMode == ButtonLayoutMode.xbox;
+
+    // Nintendo: X(top), A(right), B(bottom), Y(left) — standard Switch Pro layout
+    // Xbox:    Y(top), B(right), A(bottom), X(left) — standard Xbox 360 layout
+    // The MASK stays the same per position; only the displayed LABEL swaps.
+    final topLabel    = isXbox ? 'Y' : 'X';
+    final rightLabel  = isXbox ? 'B' : 'A';
+    final bottomLabel = isXbox ? 'A' : 'B';
+    final leftLabel   = isXbox ? 'X' : 'Y';
+
+    final accentColor = isXbox ? const Color(0xFF00C853) : const Color(0xFFFF4554);
+
     return SizedBox(
       width: widget.size,
       height: widget.size,
@@ -110,40 +124,44 @@ class _NintendoActionButtonsState extends State<NintendoActionButtons> {
               shape: BoxShape.circle,
             ),
           ),
-          // X (Top)
+          // Top button
           Positioned(
             top: 0,
             child: _buildButton(
-              label: 'X',
-              mask: widget.xMask,
-              accentColor: const Color(0xFFFF4554), // Joy-Con Neon Red
+              label: topLabel,
+              position: 'top',
+              mask: widget.xMask,  // Position "top" always sends X mask
+              accentColor: accentColor,
             ),
           ),
-          // A (Right)
+          // Right button
           Positioned(
             right: 0,
             child: _buildButton(
-              label: 'A',
-              mask: widget.aMask,
-              accentColor: const Color(0xFFFF4554),
+              label: rightLabel,
+              position: 'right',
+              mask: widget.aMask,  // Position "right" always sends A mask
+              accentColor: accentColor,
             ),
           ),
-          // B (Bottom)
+          // Bottom button
           Positioned(
             bottom: 0,
             child: _buildButton(
-              label: 'B',
-              mask: widget.bMask,
-              accentColor: const Color(0xFFFF4554),
+              label: bottomLabel,
+              position: 'bottom',
+              mask: widget.bMask,  // Position "bottom" always sends B mask
+              accentColor: accentColor,
             ),
           ),
-          // Y (Left)
+          // Left button
           Positioned(
             left: 0,
             child: _buildButton(
-              label: 'Y',
-              mask: widget.yMask,
-              accentColor: const Color(0xFFFF4554),
+              label: leftLabel,
+              position: 'left',
+              mask: widget.yMask,  // Position "left" always sends Y mask
+              accentColor: accentColor,
             ),
           ),
         ],

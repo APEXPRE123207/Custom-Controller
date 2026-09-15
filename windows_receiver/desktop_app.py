@@ -70,6 +70,107 @@ try:
 except ImportError:
     HAVE_VGAMEPAD = False
 
+# Windows Winsock Bluetooth SDP Registration Structures
+class _GUID(ctypes.Structure):
+    _fields_ = [
+        ('Data1', wintypes.DWORD),
+        ('Data2', wintypes.WORD),
+        ('Data3', wintypes.WORD),
+        ('Data4', ctypes.c_byte * 8)
+    ]
+
+_SPP_GUID = _GUID(0x00001101, 0x0000, 0x1000, (ctypes.c_byte * 8)(0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB))
+
+class _SOCKADDR_BTH(ctypes.Structure):
+    _fields_ = [
+        ('addressFamily', ctypes.c_ushort),
+        ('btAddr', ctypes.c_ulonglong),
+        ('serviceClassId', _GUID),
+        ('port', ctypes.c_ulong)
+    ]
+
+class _SOCKET_ADDRESS(ctypes.Structure):
+    _fields_ = [
+        ('lpSockaddr', ctypes.c_void_p),
+        ('iSockaddrLength', ctypes.c_int)
+    ]
+
+class _CSADDR_INFO(ctypes.Structure):
+    _fields_ = [
+        ('LocalAddr', _SOCKET_ADDRESS),
+        ('RemoteAddr', _SOCKET_ADDRESS),
+        ('iSocketType', ctypes.c_int),
+        ('iProtocol', ctypes.c_int)
+    ]
+
+class _WSAQUERYSET(ctypes.Structure):
+    _fields_ = [
+        ('dwSize', wintypes.DWORD),
+        ('lpszServiceInstanceName', wintypes.LPWSTR),
+        ('lpServiceClassId', ctypes.POINTER(_GUID)),
+        ('lpVersion', ctypes.c_void_p),
+        ('lpszComment', wintypes.LPWSTR),
+        ('dwNameSpace', wintypes.DWORD),
+        ('lpNSProviderId', ctypes.c_void_p),
+        ('lpszContext', wintypes.LPWSTR),
+        ('dwNumberOfProtocols', wintypes.DWORD),
+        ('lpafpProtocols', ctypes.c_void_p),
+        ('lpszQueryString', wintypes.LPWSTR),
+        ('dwNumberOfCsAddrs', wintypes.DWORD),
+        ('lpcsaBuffer', ctypes.POINTER(_CSADDR_INFO)),
+        ('dwOutputFlags', wintypes.DWORD),
+        ('lpBlob', ctypes.c_void_p)
+    ]
+
+def register_bt_sdp(sock, service_name="SwiCon Controller"):
+    """Register Serial Port Profile (SPP) with Windows Bluetooth SDP database."""
+    try:
+        ws2_32 = ctypes.windll.ws2_32
+        local_sa = _SOCKADDR_BTH()
+        local_len = ctypes.c_int(ctypes.sizeof(local_sa))
+        if ws2_32.getsockname(sock.fileno(), ctypes.byref(local_sa), ctypes.byref(local_len)) != 0:
+            return None
+
+        remote_sa = _SOCKADDR_BTH()
+        remote_sa.addressFamily = 32  # AF_BTH
+        remote_len = ctypes.c_int(ctypes.sizeof(remote_sa))
+
+        csaddr = _CSADDR_INFO()
+        csaddr.LocalAddr.lpSockaddr = ctypes.cast(ctypes.byref(local_sa), ctypes.c_void_p)
+        csaddr.LocalAddr.iSockaddrLength = local_len.value
+        csaddr.RemoteAddr.lpSockaddr = ctypes.cast(ctypes.byref(remote_sa), ctypes.c_void_p)
+        csaddr.RemoteAddr.iSockaddrLength = remote_len.value
+        csaddr.iSocketType = socket.SOCK_STREAM
+        csaddr.iProtocol = socket.BTPROTO_RFCOMM
+
+        qs = _WSAQUERYSET()
+        qs.dwSize = ctypes.sizeof(qs)
+        qs.lpszServiceInstanceName = service_name
+        qs.lpServiceClassId = ctypes.pointer(_SPP_GUID)
+        qs.dwNameSpace = 16  # NS_BTH
+        qs.dwNumberOfCsAddrs = 1
+        qs.lpcsaBuffer = ctypes.pointer(csaddr)
+
+        res = ws2_32.WSASetServiceW(ctypes.byref(qs), 0, 0)  # RNRSERVICE_REGISTER = 0
+        if res == 0:
+            print(f"[BT] SDP service '{service_name}' registered successfully.")
+            return qs
+        else:
+            print(f"[BT] WSASetServiceW failed: {ws2_32.WSAGetLastError()}")
+    except Exception as e:
+        print(f"[BT] Failed to register SDP service: {e}")
+    return None
+
+def unregister_bt_sdp(qs):
+    """Unregister Serial Port Profile (SPP) from Windows Bluetooth SDP database."""
+    if qs:
+        try:
+            ctypes.windll.ws2_32.WSASetServiceW(ctypes.byref(qs), 2, 0)  # RNRSERVICE_DELETE = 2
+            print("[BT] SDP service unregistered.")
+        except Exception:
+            pass
+
+
 INPUT_KEYBOARD = 1
 KEYEVENTF_EXTENDEDKEY = 0x0001
 KEYEVENTF_KEYUP = 0x0002
@@ -592,6 +693,14 @@ class DesktopReceiverApp:
         self.server_running = False
         self.sock = None
 
+        # Bluetooth state
+        self.bt_available = False
+        self.bt_server_sock = None
+        self.bt_client_sock = None
+        self.bt_authenticated = False
+        self.bt_session_token = 0
+        self._check_bluetooth_support()
+
         self.button_widgets = {}
         self._build_ui()
         self._start_server()
@@ -599,6 +708,17 @@ class DesktopReceiverApp:
         # Prompt for ViGEmBus installation if missing on launch
         if HAVE_VGAMEPAD and not is_vigembus_installed():
             self.root.after(700, self._prompt_install_vigembus)
+
+    def _check_bluetooth_support(self):
+        """Check if Python's Bluetooth socket support is available."""
+        try:
+            import socket as _s
+            if hasattr(_s, 'AF_BLUETOOTH') and hasattr(_s, 'BTPROTO_RFCOMM'):
+                self.bt_available = True
+            else:
+                self.bt_available = False
+        except Exception:
+            self.bt_available = False
 
     def _get_local_ips(self):
         ips = []
@@ -645,6 +765,14 @@ class DesktopReceiverApp:
                                 font=("Segoe UI", 11, "bold"), fg="#00E676", bg="#1D2A24", 
                                 padx=10, pady=2)
         self.pin_lbl.pack(side=tk.RIGHT, padx=14, pady=8)
+
+        # Bluetooth Status Badge
+        bt_text = "🔵 BT: Listening" if self.bt_available else "⚫ BT: N/A"
+        bt_fg = "#2196F3" if self.bt_available else "#555"
+        self.bt_status_lbl = tk.Label(conn_frame, text=bt_text,
+                                       font=("Segoe UI", 9, "bold"), fg=bt_fg, bg="#181A22",
+                                       padx=6, pady=2)
+        self.bt_status_lbl.pack(side=tk.RIGHT, padx=4, pady=8)
 
         # Main visualizer frame
         vis_frame = tk.Frame(self.root, bg="#12141A")
@@ -939,6 +1067,161 @@ class DesktopReceiverApp:
         self.thread.start()
         self.beacon_thread = threading.Thread(target=self._beacon_loop, daemon=True)
         self.beacon_thread.start()
+        # Start Bluetooth RFCOMM server if available
+        if self.bt_available:
+            self.bt_thread = threading.Thread(target=self._bt_server_loop, daemon=True)
+            self.bt_thread.start()
+
+    def _bt_server_loop(self):
+        """Bluetooth RFCOMM server — accepts connections and processes the SwiCon protocol."""
+        BT_CHANNEL = 4  # RFCOMM channel number
+        sdp_qs = None
+
+        while self.server_running:
+            try:
+                # Create and bind the RFCOMM server socket
+                self.bt_server_sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+                self.bt_server_sock.bind(("00:00:00:00:00:00", BT_CHANNEL))
+                self.bt_server_sock.listen(1)
+                self.bt_server_sock.settimeout(2.0)  # Allow periodic check of server_running
+
+                # Register SPP Service with Windows SDP
+                sdp_qs = register_bt_sdp(self.bt_server_sock)
+
+                self.root.after(0, lambda: self.bt_status_lbl.config(text="🔵 BT: Listening (SPP)", fg="#2196F3"))
+
+                while self.server_running:
+                    try:
+                        client_sock, client_info = self.bt_server_sock.accept()
+                    except socket.timeout:
+                        continue
+                    except OSError:
+                        break
+
+                    bt_addr = client_info[0] if isinstance(client_info, tuple) else str(client_info)
+                    print(f"[BT] Connection from {bt_addr}")
+                    self.bt_client_sock = client_sock
+                    self.bt_authenticated = False
+                    self.bt_session_token = 0
+
+                    self.root.after(0, lambda a=bt_addr: self.bt_status_lbl.config(
+                        text=f"🔵 BT: Connected ({a[-5:]})", fg="#00E676"))
+
+                    # Handle this client's stream
+                    self._handle_bt_client(client_sock, bt_addr)
+
+                    self.root.after(0, lambda: self.bt_status_lbl.config(
+                        text="🔵 BT: Listening (SPP)", fg="#2196F3"))
+
+            except Exception as e:
+                print(f"[BT] Server error: {e}")
+                self.root.after(0, lambda err=str(e): self.bt_status_lbl.config(
+                    text=f"🔴 BT: Error", fg="#FF6B6B"))
+                time.sleep(3)  # Wait before retrying
+            finally:
+                if sdp_qs:
+                    unregister_bt_sdp(sdp_qs)
+                    sdp_qs = None
+                try:
+                    self.bt_server_sock.close()
+                except Exception:
+                    pass
+                self.bt_server_sock = None
+
+    def _handle_bt_client(self, client_sock, bt_addr):
+        """Process the binary protocol stream from a connected Bluetooth client."""
+        buffer = b''
+        client_sock.settimeout(5.0)
+
+        # Packet sizes by type
+        PACKET_SIZES = {
+            1: 8,   # AUTH_REQUEST: SW(2) + type(1) + seq(1) + pin(4)
+            4: 14,  # INPUT_STATE:  SW(2) + type(1) + seq(1) + buttons(4) + sticks(4) + token(2)
+            5: 4,   # PING:         SW(2) + type(1) + seq(1)
+            7: 4,   # DISCOVER:     SW(2) + type(1) + seq(1)
+        }
+
+        try:
+            while self.server_running:
+                try:
+                    chunk = client_sock.recv(1024)
+                except socket.timeout:
+                    continue
+                except ConnectionResetError:
+                    break
+
+                if not chunk:
+                    break  # Client disconnected
+
+                buffer += chunk
+
+                # Parse packets from the buffer
+                while len(buffer) >= 4:
+                    # Find magic header 'SW'
+                    if buffer[0] != ord('S') or buffer[1] != ord('W'):
+                        buffer = buffer[1:]  # Skip invalid byte
+                        continue
+
+                    pkt_type = buffer[2]
+
+                    if pkt_type not in PACKET_SIZES:
+                        buffer = buffer[1:]  # Unknown type, skip
+                        continue
+
+                    expected_len = PACKET_SIZES[pkt_type]
+                    if len(buffer) < expected_len:
+                        break  # Wait for more data
+
+                    packet = buffer[:expected_len]
+                    buffer = buffer[expected_len:]
+                    seq = packet[3]
+
+                    # --- Process packet ---
+                    if pkt_type == 1 and len(packet) >= 8:
+                        # Auth Request
+                        req_pin = struct.unpack("<I", packet[4:8])[0]
+                        if req_pin == self.pin:
+                            self.bt_authenticated = True
+                            self.bt_session_token = random.randint(1, 0xFFFF)
+                            resp = struct.pack("<BBBH", ord('S'), 0x57, 2, self.bt_session_token)
+                            # Need to add seq byte: SW + type + seq + token
+                            resp = struct.pack("<BBBBH", ord('S'), ord('W'), 2, seq, self.bt_session_token)
+                            client_sock.send(resp)
+                            self.root.after(0, lambda: self._on_bt_authenticated(bt_addr))
+                        else:
+                            resp = struct.pack("<BBBB", ord('S'), ord('W'), 3, seq)
+                            client_sock.send(resp)
+
+                    elif pkt_type == 5:
+                        # Ping → Pong
+                        pong = struct.pack("<BBBB", ord('S'), ord('W'), 6, seq)
+                        client_sock.send(pong)
+
+                    elif pkt_type == 4 and len(packet) >= 14:
+                        # Input State
+                        if not self.bt_authenticated:
+                            continue
+                        token = struct.unpack("<H", packet[12:14])[0]
+                        if token != self.bt_session_token:
+                            continue
+
+                        buttons, lx, ly, rx, ry = struct.unpack("<Ibbbb", packet[4:12])
+                        self.root.after(0, lambda b=buttons, lx=lx, ly=ly, rx=rx, ry=ry:
+                                        self._process_inputs(b, lx, ly, rx, ry))
+
+        except Exception as e:
+            print(f"[BT] Client handler error: {e}")
+        finally:
+            try:
+                client_sock.close()
+            except Exception:
+                pass
+            self.bt_client_sock = None
+            self.bt_authenticated = False
+
+    def _on_bt_authenticated(self, bt_addr):
+        """Called when a Bluetooth client successfully authenticates."""
+        self.status_badge.config(text=f"● BT CONNECTED: {bt_addr[-8:]}", fg="#2196F3")
 
     def _beacon_loop(self):
         b_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -1087,6 +1370,17 @@ class DesktopReceiverApp:
             self.virtual_gamepad.disconnect()
         if self.sock:
             self.sock.close()
+        # Clean up Bluetooth
+        try:
+            if self.bt_client_sock:
+                self.bt_client_sock.close()
+        except Exception:
+            pass
+        try:
+            if self.bt_server_sock:
+                self.bt_server_sock.close()
+        except Exception:
+            pass
         self.root.destroy()
 
 if __name__ == "__main__":

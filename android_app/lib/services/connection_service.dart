@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_classic_bluetooth/flutter_classic_bluetooth.dart';
 import '../models/controller_protocol.dart';
 
 enum ConnectionStatus {
@@ -54,6 +55,7 @@ class ConnectionService extends ChangeNotifier {
   int currentLatencyMs = 0;
   String? errorMessage;
 
+  // --- Wi-Fi UDP State ---
   RawDatagramSocket? _udpSocket;
   Timer? _heartbeatTimer;
   DateTime? _lastPingSent;
@@ -63,7 +65,75 @@ class ConnectionService extends ChangeNotifier {
   double _lastRStickX = 0;
   double _lastRStickY = 0;
 
+  // --- Bluetooth State ---
+  final FlutterClassicBluetooth _bluetooth = FlutterClassicBluetooth();
+  BtcConnection? _btConnection;
+  BtcDevice? selectedBluetoothDevice;
+  List<BtcDevice> pairedDevices = [];
+  bool isBluetoothAvailable = false;
+  bool isBluetoothEnabled = false;
+  bool isLoadingDevices = false;
+  List<int> _btReceiveBuffer = [];
+
   bool get isConnected => status == ConnectionStatus.connected;
+
+  // ========================================================================
+  // Bluetooth Device Management
+  // ========================================================================
+
+  /// Check Bluetooth state and load paired devices
+  Future<void> loadBluetoothDevices() async {
+    isLoadingDevices = true;
+    notifyListeners();
+
+    try {
+      isBluetoothAvailable = await _bluetooth.isSupported();
+      isBluetoothEnabled = await _bluetooth.isEnabled();
+
+      if (isBluetoothEnabled) {
+        pairedDevices = await _bluetooth.getPairedDevices();
+      } else {
+        pairedDevices = [];
+      }
+    } catch (e) {
+      debugPrint("Error loading BT devices: $e");
+      isBluetoothAvailable = false;
+      isBluetoothEnabled = false;
+      pairedDevices = [];
+    }
+
+    isLoadingDevices = false;
+    notifyListeners();
+  }
+
+  /// Request the user to enable Bluetooth
+  Future<bool> requestEnableBluetooth() async {
+    try {
+      final caps = await _bluetooth.getPlatformCapabilities();
+      if (caps.canEnableBluetooth) {
+        await _bluetooth.enableBluetooth();
+        // Wait a moment for the adapter to come up
+        await Future.delayed(const Duration(milliseconds: 500));
+        isBluetoothEnabled = await _bluetooth.isEnabled();
+        if (isBluetoothEnabled) {
+          await loadBluetoothDevices();
+          return true;
+        }
+      }
+    } catch (e) {
+      debugPrint("Error enabling BT: $e");
+    }
+    return false;
+  }
+
+  void selectBluetoothDevice(BtcDevice device) {
+    selectedBluetoothDevice = device;
+    notifyListeners();
+  }
+
+  // ========================================================================
+  // Connection
+  // ========================================================================
 
   /// Connect to the desktop via Wi-Fi UDP or Bluetooth
   Future<void> connect({
@@ -85,7 +155,6 @@ class ConnectionService extends ChangeNotifier {
       if (transport == TransportType.wifiUdp) {
         await _connectUdp();
       } else {
-        // Bluetooth RFCOMM connection placeholder
         await _connectBluetooth();
       }
     } catch (e) {
@@ -94,6 +163,32 @@ class ConnectionService extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Connect to the desktop using Bluetooth with the selected device
+  Future<void> connectBluetooth({
+    required BtcDevice device,
+    required String pin,
+  }) async {
+    selectedBluetoothDevice = device;
+    currentPin = pin;
+    currentTransport = TransportType.bluetooth;
+
+    status = ConnectionStatus.connecting;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _connectBluetooth();
+    } catch (e) {
+      status = ConnectionStatus.failed;
+      errorMessage = e.toString();
+      notifyListeners();
+    }
+  }
+
+  // ========================================================================
+  // Wi-Fi UDP Transport
+  // ========================================================================
 
   Future<void> _connectUdp() async {
     _udpSocket?.close();
@@ -124,36 +219,20 @@ class ConnectionService extends ChangeNotifier {
     });
   }
 
-  Future<void> _connectBluetooth() async {
-    // Bluetooth connection routine
-    status = ConnectionStatus.connecting;
-    notifyListeners();
-    // Connect to paired Bluetooth RFCOMM SPP socket
-    await Future.delayed(const Duration(milliseconds: 500));
-    _sendAuthRequest();
-  }
-
   void _sendAuthRequest() {
-    if (serverAddress == null || _udpSocket == null) return;
-    try {
-      final pinInt = int.tryParse(currentPin) ?? 0;
-      final buffer = Uint8List(8);
-      final view = ByteData.view(buffer.buffer);
-      buffer[0] = 0x53; // 'S'
-      buffer[1] = 0x57; // 'W'
-      buffer[2] = PacketType.authRequest;
-      buffer[3] = _sequence++ & 0xFF;
-      view.setUint32(4, pinInt, Endian.little);
+    final pinInt = int.tryParse(currentPin) ?? 0;
+    final buffer = Uint8List(8);
+    final view = ByteData.view(buffer.buffer);
+    buffer[0] = 0x53; // 'S'
+    buffer[1] = 0x57; // 'W'
+    buffer[2] = PacketType.authRequest;
+    buffer[3] = _sequence++ & 0xFF;
+    view.setUint32(4, pinInt, Endian.little);
 
-      final address = InternetAddress(serverAddress!);
-      _udpSocket!.send(buffer, address, serverPort);
-    } catch (e) {
-      debugPrint("Error sending auth: $e");
-    }
+    _sendPacket(buffer);
   }
 
   void _sendPing() {
-    if (_udpSocket == null || serverAddress == null) return;
     _lastPingSent = DateTime.now();
     final buffer = Uint8List(4);
     buffer[0] = 0x53;
@@ -161,9 +240,169 @@ class ConnectionService extends ChangeNotifier {
     buffer[2] = PacketType.ping;
     buffer[3] = _sequence++ & 0xFF;
 
-    final address = InternetAddress(serverAddress!);
-    _udpSocket!.send(buffer, address, serverPort);
+    _sendPacket(buffer);
   }
+
+  /// Unified packet sender — routes to UDP or Bluetooth based on active transport
+  void _sendPacket(Uint8List data) {
+    try {
+      if (currentTransport == TransportType.wifiUdp) {
+        if (_udpSocket != null && serverAddress != null) {
+          final address = InternetAddress(serverAddress!);
+          _udpSocket!.send(data, address, serverPort);
+        }
+      } else {
+        // Bluetooth: send over RFCOMM stream
+        if (_btConnection != null && _btConnection!.isConnected) {
+          _btConnection!.output.add(data);
+        }
+      }
+    } catch (e) {
+      debugPrint("Error sending packet: $e");
+    }
+  }
+
+  // ========================================================================
+  // Bluetooth RFCOMM Transport
+  // ========================================================================
+
+  Future<void> _connectBluetooth() async {
+    if (selectedBluetoothDevice == null) {
+      throw Exception("No Bluetooth device selected. Please select your PC from the paired devices list.");
+    }
+
+    final address = selectedBluetoothDevice!.address;
+    debugPrint("[BT] Connecting to ${selectedBluetoothDevice!.displayName} ($address)...");
+
+    // Close any existing Bluetooth connection
+    try {
+      await _btConnection?.close();
+    } catch (_) {}
+
+    // Request permissions first (both connect and scan are required by Android when connecting)
+    try {
+      final permStatus = await _bluetooth.checkPermissions(
+        permissions: {BtcPermission.connect, BtcPermission.scan},
+      );
+      if (permStatus == BtcPermissionStatus.denied) {
+        await _bluetooth.requestPermissions(
+          permissions: {BtcPermission.connect, BtcPermission.scan},
+        );
+      }
+    } catch (e) {
+      debugPrint("[BT] Permission check: $e");
+    }
+
+    // Connect via RFCOMM SPP (try secure first, fallback to insecure)
+    try {
+      _btConnection = await _bluetooth.connect(
+        address: address,
+        secure: true,
+        timeout: const Duration(seconds: 8),
+      );
+    } catch (e) {
+      debugPrint("[BT] Secure RFCOMM connect failed: $e, trying insecure...");
+      try {
+        _btConnection = await _bluetooth.connect(
+          address: address,
+          secure: false,
+          timeout: const Duration(seconds: 8),
+        );
+      } catch (e2) {
+        throw Exception("Bluetooth connection failed: $e2\n\nMake sure:\n1. Your PC is paired with this phone\n2. SwiCon Desktop is running with Bluetooth enabled\n3. Bluetooth is on for both devices");
+      }
+    }
+
+    if (_btConnection == null || !_btConnection!.isConnected) {
+      throw Exception("Bluetooth connection could not be established.");
+    }
+
+    debugPrint("[BT] RFCOMM connected! Starting auth...");
+
+    // Listen for incoming data on the Bluetooth stream
+    _btReceiveBuffer = [];
+    _btConnection!.input.listen(
+      (Uint8List data) {
+        _btReceiveBuffer.addAll(data);
+        _processBtBuffer();
+      },
+      onDone: () {
+        debugPrint("[BT] Stream closed by remote");
+        if (status == ConnectionStatus.connected) {
+          status = ConnectionStatus.disconnected;
+          errorMessage = "Bluetooth connection lost.";
+          notifyListeners();
+        }
+      },
+      onError: (error) {
+        debugPrint("[BT] Stream error: $error");
+        if (status == ConnectionStatus.connected) {
+          status = ConnectionStatus.failed;
+          errorMessage = "Bluetooth error: $error";
+          notifyListeners();
+        }
+      },
+      cancelOnError: false,
+    );
+
+    // Authenticate
+    status = ConnectionStatus.authenticating;
+    notifyListeners();
+
+    _sendAuthRequest();
+
+    // Start heartbeat (same as UDP)
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
+      if (status == ConnectionStatus.connected) {
+        _sendPing();
+      } else if (status == ConnectionStatus.authenticating) {
+        _sendAuthRequest(); // Retry auth
+      }
+    });
+  }
+
+  /// Process buffered Bluetooth bytes — frame packets using 'SW' magic header
+  void _processBtBuffer() {
+    while (_btReceiveBuffer.length >= 4) {
+      // Find magic header 'SW'
+      if (_btReceiveBuffer[0] != 0x53 || _btReceiveBuffer[1] != 0x57) {
+        _btReceiveBuffer.removeAt(0); // Skip invalid byte
+        continue;
+      }
+
+      final packetType = _btReceiveBuffer[2];
+      int packetLen;
+
+      // Determine expected packet length based on type
+      switch (packetType) {
+        case PacketType.authSuccess:
+          packetLen = 6; // SW + type + seq + 2-byte token
+          break;
+        case PacketType.authFailed:
+        case PacketType.pong:
+          packetLen = 4; // SW + type + seq
+          break;
+        default:
+          // Unknown type, skip this byte
+          _btReceiveBuffer.removeAt(0);
+          continue;
+      }
+
+      if (_btReceiveBuffer.length < packetLen) {
+        break; // Wait for more data
+      }
+
+      // Extract and process the packet
+      final packet = Uint8List.fromList(_btReceiveBuffer.sublist(0, packetLen));
+      _btReceiveBuffer.removeRange(0, packetLen);
+      _handleIncomingPacket(packet);
+    }
+  }
+
+  // ========================================================================
+  // Incoming Packet Handler (shared by UDP and Bluetooth)
+  // ========================================================================
 
   void _handleIncomingPacket(Uint8List data) {
     if (data.length < 4) return;
@@ -189,10 +428,19 @@ class ConnectionService extends ChangeNotifier {
     }
   }
 
+  // ========================================================================
+  // Send Controller State (shared by UDP and Bluetooth)
+  // ========================================================================
+
   /// Sends state packet with high power-efficiency (skips sending if no delta changes)
   void sendState(ControllerState state, {bool force = false}) {
-    if (status != ConnectionStatus.connected || _udpSocket == null || serverAddress == null) {
-      return;
+    if (status != ConnectionStatus.connected) return;
+
+    // Check transport-specific connectivity
+    if (currentTransport == TransportType.wifiUdp) {
+      if (_udpSocket == null || serverAddress == null) return;
+    } else {
+      if (_btConnection == null || !_btConnection!.isConnected) return;
     }
 
     // Delta compression: only transmit when input values change, saving phone battery & Wi-Fi airtime
@@ -212,9 +460,12 @@ class ConnectionService extends ChangeNotifier {
     _lastRStickY = state.rightStickY;
 
     final packet = state.toBytes(_sequence++, sessionToken);
-    final target = InternetAddress(serverAddress!);
-    _udpSocket!.send(packet, target, serverPort);
+    _sendPacket(packet);
   }
+
+  // ========================================================================
+  // Wi-Fi Auto-Discovery
+  // ========================================================================
 
   /// Starts scanning the local network for SwiCon desktop receivers
   Future<void> startDiscovery() async {
@@ -323,20 +574,43 @@ class ConnectionService extends ChangeNotifier {
       name: serverName,
     );
 
-    // Automatically update server address and pin for instant 1-tap connect
+    // Auto-fill only IP and Port — PIN requires manual entry for security
     serverAddress = dg.address.address;
     serverPort = port > 0 ? port : 8899;
-    currentPin = pinVal.toString();
+    // NOTE: We intentionally do NOT auto-fill currentPin from discovery.
+    // The PIN must be entered manually by the user.
 
     isSearching = false;
     _discoveryTimer?.cancel();
     notifyListeners();
   }
 
+  // ========================================================================
+  // Disconnect & Cleanup
+  // ========================================================================
+
   void disconnect() {
     _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+
+    // Clean up UDP
     _udpSocket?.close();
     _udpSocket = null;
+
+    // Clean up Bluetooth
+    try {
+      _btConnection?.close();
+    } catch (_) {}
+    _btConnection = null;
+    _btReceiveBuffer = [];
+
+    // Reset delta tracking
+    _lastSentButtons = 0;
+    _lastLStickX = 0;
+    _lastLStickY = 0;
+    _lastRStickX = 0;
+    _lastRStickY = 0;
+
     status = ConnectionStatus.disconnected;
     sessionToken = 0;
     notifyListeners();
