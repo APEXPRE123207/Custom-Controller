@@ -23,3 +23,10 @@ __pycache__/
 *.ilk
 *.zip
 build_output/
+
+# PyInstaller build artifacts
+build_temp/
+*.spec
+
+# Screenshots / Local media
+game_ss/

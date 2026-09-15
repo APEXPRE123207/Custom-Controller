@@ -45,6 +45,9 @@ The brains of the operation. It sits on your PC, catches the wireless packets fr
 - **For people who like pretty lights**: Shows a virtual controller on your monitor that lights up in real-time as you press buttons on your phone.
 - **Stick Tracker**: Real-time crosshairs tracking every micrometer of your thumb movement.
 - **Safety Switch**: A checkbox to pause keystroke injection so you don't accidentally write `WASDZZZXX` in your boss's Teams chat.
+- **🎮 Virtual Gamepad Mode (NEW)**: Creates a real Xbox 360 controller via ViGEmBus that Ryujinx detects as native XInput. Full analog stick support — walk, jog, and sprint with variable tilt. No more digital W/A/S/D for movement.
+- **⌨ Keyboard Legacy Mode**: Toggle back to the classic scancode keyboard injection if you prefer or don't have ViGEmBus installed.
+- **Watchdog**: If your phone disconnects or goes silent for 800ms, all inputs auto-release. No more phantom key holds.
 
 #### 2. The Headless Chad Binary (`nintendo_receiver.exe`)
 - 152 Kilobytes. Zero dependencies. Pure native C++ and Win32 `SendInput`.
@@ -65,10 +68,10 @@ Pre-mapped to the default Ryujinx keyboard profile from the sacred screenshot. I
 | **+ (Plus)** | `=` | Plus / Start | Pause to take a bathroom break |
 | **- (Minus)** | `-` | Minus / Select | Open the map you'll stare at for 10 minutes |
 | **D-Pad** | `Arrow Keys` | Up/Down/Left/Right | For menus, weapon wheels, and retro purists |
-| **Left Stick** | `W / A / S / D` | L-Stick Movement | Standard PC gamer movement since the dawn of time |
-| **L3 Click** | `F` | L-Stick Click | Sprint until your thumb hurts |
-| **Right Stick** | `I / J / K / L` | Camera Controls | Look around and wonder how you got here |
-| **R3 Click** | `H` | R-Stick Click | Reset camera / lock-on |
+| **Left Stick** | `W / A / S / D` or **Analog Axis** | L-Stick Movement | Keyboard mode uses WASD. Virtual Gamepad mode sends real analog values — walk slow, run fast |
+| **L3 Click** | `F` or **L-Thumb** | L-Stick Click | Sprint until your thumb hurts |
+| **Right Stick** | `I / J / K / L` or **Analog Axis** | Camera Controls | Keyboard mode uses IJKL. Virtual Gamepad mode sends precise camera axes |
+| **R3 Click** | `H` or **R-Thumb** | R-Stick Click | Reset camera / lock-on |
 | **L / R** | `E` / `U` | Bumpers | Quick shield, dash, or bumper jumper stuff |
 | **ZL / ZR** | `Q` / `O` | Triggers | Heavy attacks, aiming bows, drift boosting |
 | **Home** | `Home` | Home | Rage quit to desktop |
@@ -76,31 +79,54 @@ Pre-mapped to the default Ryujinx keyboard profile from the sacred screenshot. I
 
 ---
 
-## 🚀 How to Run (Don't Skip These Steps)
+## 🚀 How to Run & Share with Friends (Zero-Braincell Edition)
 
-### Step 1: Start the PC Receiver
-Pick your poison:
+Got a friend who wants to play co-op Smash or Mario Kart on your PC, but neither of you owns a second controller? Send them **`dist\SwiCon.exe`** and the phone APK. That's literally it.
+
+### 🎮 The 30-Second Friend Setup:
+
+#### 1. On the PC (`dist\SwiCon.exe` or `Launch_Desktop_App.bat`):
+- Double-click **`dist\SwiCon.exe`** (or double-click **`Launch_Desktop_App.bat`**).
+- **First time on this PC?** If Windows doesn't have the ViGEmBus driver yet, SwiCon will politely ask:
+  > *"Hey, you need ViGEmBus for real analog sticks. Want me to download and install it?"*
+- Click **Yes**, approve the Windows UAC prompt, and sip your coffee. SwiCon downloads the official driver, installs it quietly, and auto-connects the virtual Xbox 360 controller. Zero manual searching.
+- Note the **Desktop IP** and **4-Digit PIN** on your screen (e.g. `4269`).
+
+#### 2. On the Phone (`android_app` APK):
+- Make sure phone and PC are on the **same Wi-Fi network**.
+- Open the SwiCon app on your phone.
+- It will usually **auto-discover** the PC instantly! If not, tap the top connection bar, type the IP & PIN, and smash **Connect**.
+- When the bar glows radiant **Neon Green**, you're locked and loaded.
+
+#### 3. In Ryujinx (One-Time Input Mapping):
+- Open **Ryujinx** → `Options` → `Settings` → **`Input`** tab.
+- Under **Player 1**, click **Configure**.
+- Set **Input Device** to: **`Controller (XBOX 360 For Windows)`**.
+- Set **Controller Type** to: **`Pro Controller`**.
+- Hit **Save**.
+- *Congratulations*: You now have zero-latency analog stick movement, smooth camera controls, and zero physical drift forever. Go terrorize Hyrule.
+
+---
+
+### 🛠️ Developer Setup (Running from Source)
+
+If you're tinkering with the code or compiling yourself:
+
+#### PC Receiver:
 ```powershell
-# Option A: The fancy graphical window with live lights
+# Conda / Virtualenv setup:
+conda activate swicon
 python windows_receiver\desktop_app.py
 
-# Option B: The lightweight native binary
-.\windows_receiver\nintendo_receiver.exe
+# Or rebuild the standalone single-file EXE:
+.\build_exe.bat
 ```
-Look at your PC screen. It will shout two things at you:
-1. Your **Desktop IP** (e.g., `192.168.1.50`)
-2. Your **Security PIN** (e.g., `4269`)
 
-### Step 2: Fire Up SwiCon on Your Phone
-Plug your phone into your PC and run:
+#### Android Phone:
 ```powershell
 cd android_app
-flutter run -d fbac6720
+flutter run --release
 ```
-1. Tap the status bar at the top (or the ⚙️ gear icon).
-2. Type in your PC's IP and the PIN.
-3. Hit **Connect to Desktop**.
-4. If it turns glowing **Green**, congratulations, you're in. Open Ryujinx and go wild.
 
 ---
 
@@ -122,6 +148,15 @@ A: Unless you're port forwarding UDP port 8899 across the open internet like a m
 
 **Q: Is there input lag?**  
 A: We send 14-byte micro-packets over local UDP. Latency is typically **< 4 milliseconds**. If you lose, it's a skill issue, not lag.
+
+**Q: How do I use the Virtual Gamepad (XInput) mode?**  
+A: Just run **`dist\SwiCon.exe`** (or `Launch_Desktop_App.bat`). SwiCon automatically checks if the ViGEmBus driver is present. If not, it prompts you and automatically downloads & installs the official driver with one click! Once installed, SwiCon creates a virtual Xbox 360 controller with real analog axes. In Ryujinx, go to `Options > Settings > Input > Player 1 > Configure`, choose `Controller (XBOX 360 For Windows)`, and enjoy true analog control.
+
+**Q: What's the difference between Virtual Gamepad and Keyboard mode?**  
+A: **Virtual Gamepad** creates a real virtual Xbox controller at the Windows driver level — Ryujinx sees actual analog axes (10% tilt ≠ 100% tilt, enabling walking vs sprinting and precise camera panning). **Keyboard mode** converts everything to key presses (W/A/S/D), which is purely digital on/off. Virtual Gamepad is strictly better for all modern games.
+
+**Q: Can I share the desktop app with someone else without them installing Python?**  
+A: Yes! Simply send them **`dist\SwiCon.exe`**. It is a single, self-contained 10 MB executable that bundles the entire Python runtime, visualizer, and gamepad libraries. No Python, Conda, or pip is needed on their machine. When they open it, if their PC lacks the ViGEmBus driver, SwiCon will automatically offer to download and install it for them.
 
 ---
 
