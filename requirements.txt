@@ -1,0 +1,6 @@
+# SwiCon Desktop Receiver Dependencies
+vgamepad>=0.1.0
+PyDirectInput>=1.0.4
+
+# Build tool (optional: required only for building SwiCon.exe)
+pyinstaller>=6.0.0

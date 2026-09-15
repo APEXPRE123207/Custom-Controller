@@ -30,3 +30,8 @@ build_temp/
 
 # Screenshots / Local media
 game_ss/
+
+# Personal local instructions & notes
+instructions
+instructions.*
+*.log

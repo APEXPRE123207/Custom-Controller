@@ -110,21 +110,50 @@ Got a friend who wants to play co-op Smash or Mario Kart on your PC, but neither
 
 ### 🛠️ Developer Setup (Running from Source)
 
-If you're tinkering with the code or compiling yourself:
+If you're tinkering with the code or prefer running directly from Python source instead of the standalone `.exe`:
 
-#### PC Receiver:
+#### 1. Create a Virtual Environment & Install Dependencies
+
+**Option A — Standard Python `venv` (No Conda needed):**
 ```powershell
-# Conda / Virtualenv setup:
-conda activate swicon
-python windows_receiver\desktop_app.py
+# Create a virtual environment named .venv
+python -m venv .venv
 
-# Or rebuild the standalone single-file EXE:
+# Activate it in PowerShell:
+.\.venv\Scripts\Activate.ps1
+# (Or in CMD): .venv\Scripts\activate.bat
+
+# Install all dependencies
+pip install -r requirements.txt
+```
+
+**Option B — Conda / MiniConda:**
+```powershell
+# Create a clean Python 3.11 environment
+conda create -n swicon python=3.11 -y
+
+# Activate the environment
+conda activate swicon
+
+# Install all dependencies
+pip install -r requirements.txt
+```
+
+#### 2. Launch the Desktop Receiver:
+```powershell
+python windows_receiver\desktop_app.py
+```
+
+#### 3. Compile the Standalone Single-File `.exe`:
+```powershell
+# Packages everything (Python + Tkinter + vgamepad + ViGEm) into dist\SwiCon.exe:
 .\build_exe.bat
 ```
 
-#### Android Phone:
+#### 4. Android Phone Setup:
 ```powershell
 cd android_app
+flutter pub get
 flutter run --release
 ```
 
