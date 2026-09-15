@@ -1,5 +1,7 @@
 # Binaries & Build outputs
 *.exe
+!dist/
+!dist/*
 build/
 android_app/build/
 android_app/.dart_tool/

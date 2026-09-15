@@ -81,7 +81,7 @@ Pre-mapped to the default Ryujinx keyboard profile from the sacred screenshot. I
 
 ## 🚀 How to Run & Share with Friends (Zero-Braincell Edition)
 
-Got a friend who wants to play co-op Smash or Mario Kart on your PC, but neither of you owns a second controller? Send them **`dist\SwiCon.exe`** and the phone APK. That's literally it.
+Got a friend who wants to play co-op Smash or Mario Kart on your PC, but neither of you owns a second controller? Send them **`dist\SwiCon.exe`** (PC) and **`dist\SwiCon.apk`** (Android) directly from the `dist/` folder. That's literally it — zero compiling required.
 
 ### 🎮 The 30-Second Friend Setup:
 
@@ -92,7 +92,8 @@ Got a friend who wants to play co-op Smash or Mario Kart on your PC, but neither
 - Click **Yes**, approve the Windows UAC prompt, and sip your coffee. SwiCon downloads the official driver, installs it quietly, and auto-connects the virtual Xbox 360 controller. Zero manual searching.
 - Note the **Desktop IP** and **4-Digit PIN** on your screen (e.g. `4269`).
 
-#### 2. On the Phone (`android_app` APK):
+#### 2. On the Phone (`dist\SwiCon.apk`):
+- Install **`dist\SwiCon.apk`** on your Android phone.
 - Make sure phone and PC are on the **same Wi-Fi network**.
 - Open the SwiCon app on your phone.
 - It will usually **auto-discover** the PC instantly! If not, tap the top connection bar, type the IP & PIN, and smash **Connect**.
