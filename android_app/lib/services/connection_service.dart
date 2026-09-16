@@ -64,6 +64,9 @@ class ConnectionService extends ChangeNotifier {
   double _lastLStickY = 0;
   double _lastRStickX = 0;
   double _lastRStickY = 0;
+  Timer? _activeInputTimer;
+  ControllerState? _lastActiveState;
+  int _neutralBurstCount = 0;
 
   // --- Bluetooth State ---
   final FlutterClassicBluetooth _bluetooth = FlutterClassicBluetooth();
@@ -432,9 +435,17 @@ class ConnectionService extends ChangeNotifier {
   // Send Controller State (shared by UDP and Bluetooth)
   // ========================================================================
 
-  /// Sends state packet with high power-efficiency (skips sending if no delta changes)
+  /// Sends state packet with high power-efficiency.
+  /// When inputs are actively held (stick moved or button held), streams packets continuously
+  /// at ~30Hz (every 33ms) so the desktop receiver's watchdog never starves and stick holds
+  /// remain active for as long as the user wants.
+  /// When released, bursts 3 neutral packets to guarantee UDP delivery, then idles to save battery.
   void sendState(ControllerState state, {bool force = false}) {
-    if (status != ConnectionStatus.connected) return;
+    if (status != ConnectionStatus.connected) {
+      _activeInputTimer?.cancel();
+      _activeInputTimer = null;
+      return;
+    }
 
     // Check transport-specific connectivity
     if (currentTransport == TransportType.wifiUdp) {
@@ -443,24 +454,56 @@ class ConnectionService extends ChangeNotifier {
       if (_btConnection == null || !_btConnection!.isConnected) return;
     }
 
-    // Delta compression: only transmit when input values change, saving phone battery & Wi-Fi airtime
+    _lastActiveState = state;
+    final isActive = state.isActive;
+
+    // Delta compression: only transmit immediately when input values change
     final hasDelta = force ||
         state.buttons != _lastSentButtons ||
-        (state.leftStickX - _lastLStickX).abs() > 0.05 ||
-        (state.leftStickY - _lastLStickY).abs() > 0.05 ||
-        (state.rightStickX - _lastRStickX).abs() > 0.05 ||
-        (state.rightStickY - _lastRStickY).abs() > 0.05;
+        (state.leftStickX - _lastLStickX).abs() > 0.03 ||
+        (state.leftStickY - _lastLStickY).abs() > 0.03 ||
+        (state.rightStickX - _lastRStickX).abs() > 0.03 ||
+        (state.rightStickY - _lastRStickY).abs() > 0.03;
 
-    if (!hasDelta) return;
+    if (hasDelta) {
+      _lastSentButtons = state.buttons;
+      _lastLStickX = state.leftStickX;
+      _lastLStickY = state.leftStickY;
+      _lastRStickX = state.rightStickX;
+      _lastRStickY = state.rightStickY;
 
-    _lastSentButtons = state.buttons;
-    _lastLStickX = state.leftStickX;
-    _lastLStickY = state.leftStickY;
-    _lastRStickX = state.rightStickX;
-    _lastRStickY = state.rightStickY;
+      final packet = state.toBytes(_sequence++, sessionToken);
+      _sendPacket(packet);
+    }
 
-    final packet = state.toBytes(_sequence++, sessionToken);
-    _sendPacket(packet);
+    if (isActive) {
+      _neutralBurstCount = 0;
+      _activeInputTimer ??= Timer.periodic(const Duration(milliseconds: 33), (timer) {
+        if (status != ConnectionStatus.connected) {
+          timer.cancel();
+          _activeInputTimer = null;
+          return;
+        }
+
+        final currState = _lastActiveState;
+        if (currState != null && currState.isActive) {
+          final packet = currState.toBytes(_sequence++, sessionToken);
+          _sendPacket(packet);
+        } else {
+          // Input returned to neutral! Burst 3 neutral packets to ensure delivery over UDP
+          if (_neutralBurstCount < 3) {
+            _neutralBurstCount++;
+            final neutral = currState ?? ControllerState();
+            final packet = neutral.toBytes(_sequence++, sessionToken);
+            _sendPacket(packet);
+          } else {
+            timer.cancel();
+            _activeInputTimer = null;
+            _neutralBurstCount = 0;
+          }
+        }
+      });
+    }
   }
 
   // ========================================================================
@@ -592,6 +635,10 @@ class ConnectionService extends ChangeNotifier {
   void disconnect() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
+    _activeInputTimer?.cancel();
+    _activeInputTimer = null;
+    _lastActiveState = null;
+    _neutralBurstCount = 0;
 
     // Clean up UDP
     _udpSocket?.close();

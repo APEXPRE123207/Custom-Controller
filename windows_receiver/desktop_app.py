@@ -317,7 +317,7 @@ if HAVE_VGAMEPAD:
 # Deadzone: 5% of 127 ≈ 6
 STICK_DEADZONE = 6
 # Watchdog timeout (ms) — release all if no packets arrive
-WATCHDOG_TIMEOUT_MS = 800
+WATCHDOG_TIMEOUT_MS = 1500
 
 def apply_deadzone_and_scale(raw_int8, deadzone=STICK_DEADZONE):
     """Convert int8 (-127..+127) to int16 (-32768..+32767) with deadzone."""

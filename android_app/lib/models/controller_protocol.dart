@@ -54,6 +54,14 @@ class ControllerState {
 
   bool isPressed(int buttonMask) => (buttons & buttonMask) != 0;
 
+  /// Returns true if any button is pressed or any stick is tilted away from neutral center
+  bool get isActive =>
+      buttons != 0 ||
+      leftStickX.abs() > 0.05 ||
+      leftStickY.abs() > 0.05 ||
+      rightStickX.abs() > 0.05 ||
+      rightStickY.abs() > 0.05;
+
   /// Serializes the state into a fixed 14-byte binary packet
   Uint8List toBytes(int sequence, int sessionToken) {
     final buffer = Uint8List(14);
