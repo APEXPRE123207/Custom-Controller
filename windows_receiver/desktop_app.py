@@ -64,11 +64,29 @@ except ImportError:
     HAVE_PYDIRECTINPUT = False
 
 # Virtual Gamepad (ViGEmBus / XInput) support
-try:
-    import vgamepad as vg
-    HAVE_VGAMEPAD = True
-except ImportError:
-    HAVE_VGAMEPAD = False
+vg = None
+HAVE_VGAMEPAD = False
+
+def init_vgamepad_support():
+    """Attempt to import vgamepad. Safe against missing ViGEmBus kernel driver."""
+    global vg, HAVE_VGAMEPAD
+    try:
+        import vgamepad as _vg
+        vg = _vg
+        HAVE_VGAMEPAD = True
+        return True
+    except Exception as e:
+        # VIGEM_ERROR_BUS_NOT_FOUND or missing DLLs
+        # Purge partial imports so subsequent attempts after driver installation can succeed
+        for mod in list(sys.modules.keys()):
+            if mod.startswith('vgamepad'):
+                sys.modules.pop(mod, None)
+        vg = None
+        HAVE_VGAMEPAD = False
+        return False
+
+# Attempt initial load (succeeds if ViGEmBus driver is already installed on Windows)
+init_vgamepad_support()
 
 # Windows Winsock Bluetooth SDP Registration Structures
 class _GUID(ctypes.Structure):
@@ -290,29 +308,26 @@ def release_all():
 # ============================================================================
 
 # Nintendo→Xbox button mapping (Note: Nintendo A/B and X/Y are swapped vs Xbox)
-SWITCH_TO_XINPUT_BUTTONS = None  # Initialized only when vgamepad is available
-
-if HAVE_VGAMEPAD:
-    SWITCH_TO_XINPUT_BUTTONS = {
-        # mask: XUSB_BUTTON constant
-        (1 << 0):  vg.XUSB_BUTTON.XUSB_GAMEPAD_B,            # Switch A → Xbox B (right-side bottom)
-        (1 << 1):  vg.XUSB_BUTTON.XUSB_GAMEPAD_A,            # Switch B → Xbox A (right-side right)
-        (1 << 2):  vg.XUSB_BUTTON.XUSB_GAMEPAD_Y,            # Switch X → Xbox Y (right-side top)
-        (1 << 3):  vg.XUSB_BUTTON.XUSB_GAMEPAD_X,            # Switch Y → Xbox X (right-side left)
-        (1 << 4):  vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_UP,      # D-Up
-        (1 << 5):  vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN,    # D-Down
-        (1 << 6):  vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT,    # D-Left
-        (1 << 7):  vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT,   # D-Right
-        (1 << 8):  vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_SHOULDER,  # L
-        (1 << 9):  vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_SHOULDER, # R
-        # ZL (1<<10) and ZR (1<<11) → analog triggers, handled separately
-        (1 << 12): vg.XUSB_BUTTON.XUSB_GAMEPAD_START,         # +
-        (1 << 13): vg.XUSB_BUTTON.XUSB_GAMEPAD_BACK,          # -
-        (1 << 14): vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_THUMB,    # L3
-        (1 << 15): vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_THUMB,   # R3
-        (1 << 16): vg.XUSB_BUTTON.XUSB_GAMEPAD_GUIDE,         # Home
-        # Capture (1<<17) → no Xbox equivalent, mapped to keyboard F12 fallback
-    }
+# Standard XInput button bitmasks (independent of vgamepad import state)
+SWITCH_TO_XINPUT_BUTTONS = {
+    (1 << 0):  0x2000,  # XUSB_GAMEPAD_B (Switch A → Xbox B)
+    (1 << 1):  0x1000,  # XUSB_GAMEPAD_A (Switch B → Xbox A)
+    (1 << 2):  0x8000,  # XUSB_GAMEPAD_Y (Switch X → Xbox Y)
+    (1 << 3):  0x4000,  # XUSB_GAMEPAD_X (Switch Y → Xbox X)
+    (1 << 4):  0x0001,  # XUSB_GAMEPAD_DPAD_UP
+    (1 << 5):  0x0002,  # XUSB_GAMEPAD_DPAD_DOWN
+    (1 << 6):  0x0004,  # XUSB_GAMEPAD_DPAD_LEFT
+    (1 << 7):  0x0008,  # XUSB_GAMEPAD_DPAD_RIGHT
+    (1 << 8):  0x0100,  # XUSB_GAMEPAD_LEFT_SHOULDER (L)
+    (1 << 9):  0x0200,  # XUSB_GAMEPAD_RIGHT_SHOULDER (R)
+    # ZL (1<<10) and ZR (1<<11) → analog triggers, handled separately
+    (1 << 12): 0x0010,  # XUSB_GAMEPAD_START (+)
+    (1 << 13): 0x0020,  # XUSB_GAMEPAD_BACK (-)
+    (1 << 14): 0x0040,  # XUSB_GAMEPAD_LEFT_THUMB (L3)
+    (1 << 15): 0x0080,  # XUSB_GAMEPAD_RIGHT_THUMB (R3)
+    (1 << 16): 0x0400,  # XUSB_GAMEPAD_GUIDE (Home)
+    # Capture (1<<17) → no Xbox equivalent, mapped to keyboard F12 fallback
+}
 
 # Deadzone: 5% of 127 ≈ 6
 STICK_DEADZONE = 6
@@ -338,21 +353,18 @@ VIGEMBUS_REG_KEY = r"SYSTEM\CurrentControlSet\Services\ViGEmBus"
 
 def is_vigembus_installed():
     """Check if the official ViGEmBus driver is installed on Windows."""
+    global HAVE_VGAMEPAD, vg
     try:
         key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, VIGEMBUS_REG_KEY)
         winreg.CloseKey(key)
-        return True
     except Exception:
-        pass
-    if HAVE_VGAMEPAD:
-        try:
-            # If driver is installed, VX360Gamepad will instantiate cleanly
-            test_gp = vg.VX360Gamepad()
-            del test_gp
-            return True
-        except Exception:
-            return False
-    return False
+        return False
+
+    # Driver service exists in registry — ensure vgamepad module is loaded
+    if not HAVE_VGAMEPAD or vg is None:
+        init_vgamepad_support()
+
+    return HAVE_VGAMEPAD
 
 
 class VirtualGamepad:
@@ -374,8 +386,9 @@ class VirtualGamepad:
 
     def connect(self):
         """Create and plug in the virtual Xbox 360 controller."""
-        if not HAVE_VGAMEPAD:
-            return False
+        if not HAVE_VGAMEPAD or vg is None:
+            if not init_vgamepad_support():
+                return False
         try:
             self.gamepad = vg.VX360Gamepad()
             self.active = True
@@ -706,7 +719,7 @@ class DesktopReceiverApp:
         self._start_server()
 
         # Prompt for ViGEmBus installation if missing on launch
-        if HAVE_VGAMEPAD and not is_vigembus_installed():
+        if not is_vigembus_installed():
             self.root.after(700, self._prompt_install_vigembus)
 
     def _check_bluetooth_support(self):
@@ -897,8 +910,7 @@ class DesktopReceiverApp:
                                      font=("Segoe UI", 9, "bold"),
                                      fg="#E2E6EF", bg="#181A22", selectcolor="#202430",
                                      activebackground="#181A22", activeforeground="#FFFFFF",
-                                     command=self._on_mode_change,
-                                     state=tk.NORMAL if HAVE_VGAMEPAD else tk.DISABLED)
+                                     command=self._on_mode_change)
         gamepad_rb.pack(side=tk.LEFT, padx=4)
 
         keyboard_rb = tk.Radiobutton(mode_frame, text="⌨ Keyboard Injection (Legacy)",
@@ -913,11 +925,6 @@ class DesktopReceiverApp:
                                    bg="#00796B", fg="#FFFFFF", relief=tk.FLAT, padx=8, pady=1,
                                    command=self._install_vigembus_dialog)
         self._update_vigem_ui_state()
-
-        if not HAVE_VGAMEPAD:
-            no_vg_lbl = tk.Label(mode_frame, text="(vgamepad not installed)",
-                                 font=("Segoe UI", 8), fg="#FF6B6B", bg="#181A22")
-            no_vg_lbl.pack(side=tk.LEFT, padx=4)
 
         # --- Action buttons row ---
         action_frame = tk.Frame(bottom_bar, bg="#181A22")
@@ -1041,6 +1048,7 @@ class DesktopReceiverApp:
 
     def _on_vigembus_installed_successfully(self):
         """Called when ViGEmBus installer finishes successfully."""
+        init_vgamepad_support()
         self.input_mode.set('gamepad')
         self._on_mode_change()
         self._update_vigem_ui_state()
